@@ -1,0 +1,70 @@
+/* src/index.css */
+:root {
+  /* --- COLOR PALETTE (Dark Mode) --- */
+  --bg-app: #0f172a;       /* Deep Slate (Main Background) */
+  --bg-panel: #1e293b;     /* Lighter Slate (Cards, Sidebar) */
+  --bg-panel-hover: #334155; /* Slightly lighter for hover states */
+  
+  /* Brand Colors */
+  --primary: #6366f1;      /* Indigo (AI/Intelligence) */
+  --primary-hover: #4f46e5;
+  --secondary: #10b981;    /* Emerald (Growth/Success) */
+  
+  /* Status Colors */
+  --success: #10b981;
+  --warning: #f59e0b;      /* Amber */
+  --danger: #ef4444;       /* Red */
+  
+  /* Text Colors */
+  --text-main: #f8fafc;    /* Off-white for readability */
+  --text-muted: #94a3b8;   /* Grey for secondary text */
+  --text-dim: #64748b;     /* Darker grey for borders/icons */
+  
+  /* --- METRICS --- */
+  --sidebar-width: 260px;
+  --header-height: 70px;
+  
+  /* --- BORDERS & RADIUS --- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --border-color: #334155;
+}
+
+/* Global Reset */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+/* Scrollbar Styling (Optional but looks nice in dark mode) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-app); 
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-panel-hover); 
+  border-radius: 4px;
+}

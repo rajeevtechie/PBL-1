@@ -1,0 +1,176 @@
+/* Full screen, no scrolling */
+.focusContainer {
+  height: 100vh;
+  background-color: #000000; /* Pure black for focus */
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  height: 70px;
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #333;
+}
+
+.topicInfo h1 {
+  font-size: 1.2rem;
+  margin: 0;
+  color: var(--text-main);
+}
+
+.badge {
+  color: var(--success);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  margin-right: 12px;
+}
+
+.exitBtn {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.exitBtn:hover {
+  background: var(--danger);
+  color: white;
+}
+
+/* Main Grid */
+.contentGrid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 350px; /* Timer takes most space, Resources take 350px */
+}
+
+/* Timer Section */
+.timerSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #1e293b 0%, #000000 70%);
+}
+
+.timerCircle {
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  border: 4px solid var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 50px rgba(99, 102, 241, 0.1);
+  margin-bottom: 2rem;
+}
+
+.timeDisplay {
+  font-size: 5rem;
+  font-weight: 200;
+  font-variant-numeric: tabular-nums; /* Keeps numbers from jumping */
+  color: var(--text-main);
+}
+
+.statusText {
+  color: var(--text-muted);
+  margin-top: -10px;
+}
+
+.toggleBtn {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+.toggleBtn:hover {
+  transform: scale(1.05);
+}
+
+/* Resources Panel */
+.resourcesPanel {
+  background-color: #0f172a;
+  border-left: 1px solid #333;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.resourcesPanel h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.resourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 2rem;
+}
+
+.resourceCard {
+  background-color: var(--bg-panel);
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.resourceCard:hover {
+  background-color: var(--bg-panel-hover);
+}
+
+.resourceCard h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.tag {
+  font-size: 0.7rem;
+  color: var(--primary);
+}
+
+.notesArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.notesInput {
+  flex: 1;
+  background-color: var(--bg-panel);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+  color: var(--text-main);
+  resize: none;
+  font-family: inherit;
+}
+
+.notesInput:focus {
+  outline: 1px solid var(--primary);
+}

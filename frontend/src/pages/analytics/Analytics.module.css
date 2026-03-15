@@ -1,0 +1,207 @@
+.analyticsContainer {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 2.5rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  margin: 0;
+  color: var(--text-main);
+}
+
+.header p {
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* METRICS GRID */
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 3rem;
+}
+
+.metricCard {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  transition: transform 0.2s;
+}
+
+.metricCard:hover {
+  transform: translateY(-4px);
+  border-color: var(--primary);
+}
+
+.cardIcon {
+  padding: 10px;
+  background-color: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  border-radius: 8px;
+}
+
+.cardContent h3 {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.bigValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+
+.subText {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* CHARTS ROW */
+.chartsRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr; /* Graph takes more space */
+  gap: 24px;
+}
+
+.chartCard {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  min-height: 350px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chartHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.chartHeader h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.chartHeader select {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  padding: 4px 8px;
+  border-radius: 6px;
+  outline: none;
+}
+
+/* GRAPH BAR VISUALIZATION */
+.graphContainer {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 10px;
+}
+
+.barGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.bar {
+  width: 12px;
+  background-color: var(--secondary);
+  border-radius: 4px 4px 0 0;
+  opacity: 0.7;
+  transition: height 0.5s ease;
+}
+
+.bar:hover {
+  opacity: 1;
+  width: 16px;
+}
+
+.barGroup span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* FLOW STATE CONTENT */
+.flowContent {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+  justify-content: center;
+}
+
+.flowStat {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.flowIcon {
+  color: var(--warning);
+}
+
+.flowStat h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.flowStat span {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.flowDesc {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  background-color: var(--bg-app);
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+.tags {
+  display: flex;
+  gap: 8px;
+}
+
+.tags span {
+  background-color: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .metricsGrid { grid-template-columns: 1fr; }
+  .chartsRow { grid-template-columns: 1fr; }
+}

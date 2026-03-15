@@ -1,0 +1,266 @@
+.authContainer {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-app);
+  overflow: hidden;
+}
+
+/* LEFT SIDE: Brand */
+.brandSection {
+  flex: 1;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4rem;
+  color: white;
+  overflow: hidden;
+}
+
+.brandContent {
+  position: relative;
+  z-index: 10;
+  max-width: 500px;
+}
+
+.logoBadge {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+}
+
+.brandSection h1 {
+  font-size: 3rem;
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+}
+
+.brandSection p {
+  font-size: 1.1rem;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin-bottom: 3rem;
+}
+
+.featureList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--success);
+  border-radius: 50%;
+}
+
+/* Background Shapes */
+.circle1 {
+  position: absolute;
+  top: -100px;
+  right: -100px;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(0,0,0,0) 70%);
+  border-radius: 50%;
+}
+
+.circle2 {
+  position: absolute;
+  bottom: -50px;
+  left: -50px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, rgba(0,0,0,0) 70%);
+  border-radius: 50%;
+}
+
+/* RIGHT SIDE: Form */
+.formSection {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #0f172a; /* Dark background */
+  padding: 2rem;
+}
+
+.formWrapper {
+  width: 100%;
+  max-width: 420px;
+}
+
+.header {
+  margin-bottom: 2.5rem;
+}
+
+.header h2 {
+  font-size: 2rem;
+  color: var(--text-main);
+  margin: 0 0 0.5rem 0;
+}
+
+.header p {
+  color: var(--text-muted);
+}
+
+/* Role Toggle */
+.roleToggle {
+  background-color: var(--bg-panel);
+  padding: 4px;
+  border-radius: 12px;
+  display: flex;
+  margin-bottom: 2rem;
+  border: 1px solid var(--border-color);
+}
+
+.roleToggle button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.activeRole {
+  background-color: var(--bg-panel-hover);
+  color: var(--text-main) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+/* Inputs */
+.inputGroup {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.inputIcon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.inputGroup input {
+  width: 100%;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  padding: 14px 16px 14px 48px; /* Left padding for icon */
+  border-radius: 12px;
+  color: var(--text-main);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.inputGroup input:focus {
+  border-color: var(--primary);
+}
+
+.options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  font-size: 0.9rem;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.forgotLink {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.submitBtn {
+  width: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  color: white;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: opacity 0.2s;
+}
+
+.submitBtn:hover {
+  opacity: 0.9;
+}
+
+.footerText {
+  text-align: center;
+  margin-top: 2rem;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.footerText a {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* Mobile Responsive */
+@media (max-width: 900px) {
+  .brandSection {
+    display: none;
+  }
+}
+/* frontend/src/pages/auth/Auth.module.css */
+
+/* ... keep all existing css ... */
+
+.passwordToggle {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.2s;
+  z-index: 5;
+}
+
+.passwordToggle:hover {
+  color: var(--primary);
+}

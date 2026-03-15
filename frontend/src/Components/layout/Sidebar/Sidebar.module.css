@@ -1,0 +1,122 @@
+.sidebar {
+  width: 260px;
+  height: 100vh;
+  background-color: var(--bg-panel);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  transition: transform 0.3s ease;
+}
+
+/* 1. LOGO SECTION */
+.logoContainer {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-color);
+  
+  /* CRITICAL: Makes it look clickable */
+  cursor: pointer; 
+  transition: background-color 0.2s;
+}
+
+.logoContainer:hover {
+  background-color: var(--bg-app); /* Subtle hover effect */
+}
+
+.logoIcon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.logoText {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.5px;
+}
+
+/* 2. NAVIGATION LINKS */
+.navMenu {
+  flex: 1; /* Pushes the footer down */
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-weight: 500;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+}
+
+.navItem:hover {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+}
+
+/* Active State (When you are on that page) */
+.active {
+  background-color: rgba(99, 102, 241, 0.1); /* Low opacity primary */
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 12px 0;
+}
+
+/* 3. LOGOUT BUTTON */
+.footer {
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+}
+
+.logoutBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none; /* Removes default button border */
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+  
+  /* CRITICAL: Makes it look clickable */
+  cursor: pointer; 
+  transition: all 0.2s;
+}
+
+/* Red Hover Effect for Logout */
+.logoutBtn:hover {
+  background-color: rgba(239, 68, 68, 0.1); 
+  color: var(--danger);
+}

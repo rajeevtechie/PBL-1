@@ -1,0 +1,111 @@
+.overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 450px;
+  padding: 2rem;
+  position: relative;
+  text-align: center;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.closeBtn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.iconCircle {
+  width: 64px;
+  height: 64px;
+  background-color: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem auto;
+}
+
+.uploadState h2 { margin-bottom: 0.5rem; }
+.uploadState p { color: var(--text-muted); margin-bottom: 2rem; }
+
+.dropZone {
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+}
+
+.dropZone:hover {
+  border-color: var(--primary);
+  background-color: var(--bg-panel-hover);
+}
+
+.progressContainer {
+  height: 6px;
+  background-color: var(--bg-app);
+  border-radius: 3px;
+  margin-top: 1.5rem;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  background-color: var(--primary);
+  transition: width 0.1s linear;
+}
+
+/* PROCESSING STATE */
+.spinner {
+  color: var(--primary);
+  animation: spin 1s linear infinite;
+  margin-bottom: 1.5rem;
+}
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+.processingState ul {
+  text-align: left;
+  color: var(--text-muted);
+  list-style: none;
+  padding: 0;
+  margin-top: 1rem;
+}
+.processingState li { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+/* DONE STATE */
+.successIcon { color: var(--success); margin-bottom: 1rem; }
+.primaryBtn {
+  background-color: var(--primary);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 30px;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  width: 100%;
+}

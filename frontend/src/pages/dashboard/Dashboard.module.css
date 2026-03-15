@@ -1,0 +1,241 @@
+/* THE GRID LAYOUT */
+.dashboardGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr; /* Left column is 2x wider */
+  gap: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* 1. HERO SECTION (Spans full width) */
+.heroSection {
+  grid-column: 1 / -1; /* Span all columns */
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(16, 185, 129, 0.05));
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  position: relative;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.heroHeader {
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.heroBadge {
+  background-color: var(--primary);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.heroUrgency {
+  color: var(--warning);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.taskTitle {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem 0;
+  color: var(--text-main);
+}
+
+.taskReason {
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin-bottom: 2rem;
+}
+
+.startBtn {
+  background-color: var(--success);
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 14px 32px;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+}
+
+.startBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.6);
+}
+
+/* 2. TRACK CARDS */
+.trackCard {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.trackTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.trackTitle h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.trackPercent {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.progressBar {
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.cardSubtext {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* 3. CONSISTENCY & FLOW */
+.consistencySection {
+  grid-column: 1 / 2;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+}
+
+.flowCard {
+  grid-column: 2 / 3;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.statsRow {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1rem;
+}
+
+.statValue {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.statLabel {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.graphPlaceholder {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 60px;
+  margin-top: 1rem;
+}
+
+.bar {
+  flex: 1;
+  background-color: var(--success);
+  border-radius: 4px;
+  opacity: 0.5;
+}
+
+.flowTime {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0.5rem 0;
+}
+
+.flowNote {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* 4. AI INSIGHT (Full width bottom) */
+.insightCard {
+  grid-column: 1 / -1;
+  background: linear-gradient(90deg, var(--bg-panel), rgba(99, 102, 241, 0.1));
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+}
+
+.insightHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  color: var(--primary);
+}
+
+.aiBadge {
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.insightText {
+  color: var(--text-main);
+  font-style: italic;
+  margin: 0;
+  line-height: 1.5;
+}

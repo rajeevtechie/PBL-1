@@ -1,0 +1,236 @@
+.insightsContainer {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr; /* Left is wider */
+  gap: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  height: calc(100vh - 140px); /* Fit within view */
+}
+
+/* HEADER */
+.header {
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  margin: 0;
+  color: var(--text-main);
+}
+
+.header p {
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* CARDS COLUMN */
+.feedColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  padding-right: 10px; /* Space for scrollbar */
+}
+
+.insightCard {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.iconBox {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background-color: var(--bg-panel-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.insightCard h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.insightCard p {
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0 0 1.5rem 0;
+}
+
+.insightCard strong {
+  color: var(--text-main);
+}
+
+/* Special Card Styles */
+.critical {
+  border-left: 4px solid var(--danger);
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.05), var(--bg-panel));
+}
+.critical .iconBox { color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+
+.opportunity {
+  border-left: 4px solid var(--success);
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.05), var(--bg-panel));
+}
+.opportunity .iconBox { color: var(--success); background: rgba(16, 185, 129, 0.1); }
+
+/* Buttons & Resources */
+.actionBtn {
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 10px 20px;
+  border-radius: 30px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.actionBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.resourceLink {
+  background-color: var(--bg-app);
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resourceIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+}
+
+.resourceLink h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--primary);
+}
+
+.resourceLink span {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* CHAT COLUMN */
+.chatColumn {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chatHeader {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chatHeader h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.onlineDot {
+  width: 10px;
+  height: 10px;
+  background-color: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--success);
+}
+
+.chatWindow {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background-color: #0f172a;
+}
+
+.message {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  position: relative;
+}
+
+.aiMessage {
+  align-self: flex-start;
+  background-color: var(--bg-panel);
+  color: var(--text-main);
+  border-bottom-left-radius: 2px;
+}
+
+.userMessage {
+  align-self: flex-end;
+  background-color: var(--primary);
+  color: white;
+  border-bottom-right-radius: 2px;
+}
+
+.time {
+  display: block;
+  font-size: 0.7rem;
+  margin-top: 6px;
+  opacity: 0.7;
+  text-align: right;
+}
+
+.chatInputArea {
+  padding: 1rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 10px;
+  background-color: var(--bg-panel);
+}
+
+.chatInputArea input {
+  flex: 1;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 10px 16px;
+  color: var(--text-main);
+  outline: none;
+}
+
+.chatInputArea button {
+  background-color: var(--primary);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
