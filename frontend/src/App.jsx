@@ -13,7 +13,9 @@ import Register from './pages/auth/Register'; // ✅ Imported correctly
 import Dashboard from './pages/dashboard/Dashboard';
 import Roadmap from './pages/roadmap/Roadmap';        // Feature 3: Dual Track
 import Analytics from './pages/analytics/Analytics';  // Feature 4 & 6: Velocity & Flow State
-import Assessment from './pages/assessment/Assessment'; // Feature 1: Quiz Engine
+import Assessment from './pages/practise_lab/practise_lab'; // Feature 1: Practice Lab
+import PractiseTopics from './pages/practise_lab/practise_topics';
+import PractiseQuiz from './pages/practise_lab/practise_quiz';
 import Insights from './pages/insights/Insights';     // Feature 2: AI Narratives
 import Settings from './pages/settings/Settings';     // User Config
 
@@ -50,6 +52,8 @@ function App() {
           <Route path="/roadmap" element={<Roadmap />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/assessment" element={<Assessment />} />
+          <Route path="/practice-topics" element={<PractiseTopics />} />
+          <Route path="/practice-quiz" element={<PractiseQuiz />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="/settings" element={<Settings />} />
         </Route>

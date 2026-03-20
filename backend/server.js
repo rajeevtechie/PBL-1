@@ -7,6 +7,8 @@ const path = require('path');
 // --- Import Routes ---
 const authRoutes = require('./routes/authRoutes');
 const syllabusRoutes = require('./routes/syllabusRoutes'); 
+const practiceRoutes = require('./routes/practiceRoutes');
+const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,6 +22,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // --- Routes ---
 app.use('/api/auth', authRoutes);       // Login & Register
 app.use('/api/syllabus', syllabusRoutes); // AI & Uploads
+app.use('/api/practice', practiceRoutes); // Practice Lab
 
 // --- Test Route ---
 app.get('/', (req, res) => {
@@ -27,10 +30,7 @@ app.get('/', (req, res) => {
 });
 
 // --- Error Handling ---
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ message: 'Something went wrong!', error: err.message });
-});
+app.use(errorHandler);
 
 // --- Start Server ---
 app.listen(PORT, () => {
