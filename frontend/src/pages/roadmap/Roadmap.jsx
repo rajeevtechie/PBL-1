@@ -76,7 +76,6 @@ const Roadmap = () => {
           </div>
       );
   }
-
   if (error) {
       return (
           <div className={styles.centerMsg}>

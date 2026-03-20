@@ -76,7 +76,7 @@ const Sidebar = () => {
           className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
         >
           <CheckSquare size={20} />
-          <span>Assessment</span>
+          <span>Practice Lab</span>
         </NavLink>
 
         <NavLink 
