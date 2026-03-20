@@ -1,9 +1,9 @@
 .authContainer {
   display: flex;
-  height: 100vh;
+  min-height: 100vh; /* ✅ FIX: allow content to grow */
   width: 100vw;
   background-color: var(--bg-app);
-  overflow: hidden;
+  overflow-y: auto; /* ✅ FIX: enable scroll */
 }
 
 /* LEFT SIDE: Brand */
@@ -14,7 +14,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 4rem;
+  padding: 3rem;
   color: white;
   overflow: hidden;
 }
@@ -103,7 +103,7 @@
   border-radius: 50%;
 }
 
-/* RIGHT SIDE: Form */
+/* RIGHT SIDE */
 .formSection {
   flex: 1;
   display: flex;
@@ -111,15 +111,18 @@
   justify-content: center;
   background-color: #0f172a;
   padding: 2rem;
+  padding-top: 3rem;
 }
 
+/* FORM */
 .formWrapper {
   width: 100%;
-  max-width: 420px;
+  max-width: 460px;
+  padding-top: 20px;
 }
 
 .header {
-  margin-bottom: 2.5rem;
+  margin-bottom: 2rem;
 }
 
 .header h2 {
@@ -132,10 +135,10 @@
   color: var(--text-muted);
 }
 
-/* Inputs */
+/* INPUTS */
 .inputGroup {
   position: relative;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.6rem;
 }
 
 .inputIcon {
@@ -163,7 +166,7 @@
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
-/* Password toggle */
+/* PASSWORD TOGGLE */
 .passwordToggle {
   position: absolute;
   right: 16px;
@@ -173,41 +176,51 @@
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  z-index: 5;
-  transition: color 0.2s;
 }
 
 .passwordToggle:hover {
   color: var(--primary);
 }
 
-/* Options */
-.options {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-  font-size: 0.9rem;
+/* TERMS */
+.terms {
+  margin-bottom: 1.8rem;
 }
 
-.checkbox {
+.termsLabel {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  font-size: 0.9rem;
   color: var(--text-muted);
   cursor: pointer;
 }
 
-.forgotLink {
+.termsLabel input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.link {
   color: var(--primary);
   font-weight: 500;
 }
 
-/* Button */
+/* ERROR */
+.errorBox {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+/* BUTTON */
 .submitBtn {
   width: 100%;
   background: linear-gradient(90deg, var(--primary), var(--primary-hover));
@@ -221,6 +234,7 @@
   justify-content: center;
   gap: 12px;
   transition: all 0.2s ease;
+  margin-top: 10px;
 }
 
 .submitBtn:hover {
@@ -231,10 +245,10 @@
   transform: scale(0.98);
 }
 
-/* Footer */
+/* FOOTER */
 .footerText {
   text-align: center;
-  margin-top: 2rem;
+  margin-top: 1.8rem;
   color: var(--text-muted);
   font-size: 0.95rem;
 }
@@ -242,9 +256,10 @@
 .footerText a {
   color: var(--primary);
   font-weight: 600;
+  margin-left: 4px;
 }
 
-/* Mobile */
+/* MOBILE */
 @media (max-width: 900px) {
   .brandSection {
     display: none;
