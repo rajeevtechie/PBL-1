@@ -36,7 +36,16 @@
   font-weight: 800;
   font-size: 1.2rem;
   margin-bottom: 2rem;
-  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+  animation: glow 2s infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+  }
+  to {
+    box-shadow: 0 10px 40px rgba(99, 102, 241, 0.6);
+  }
 }
 
 .brandSection h1 {
@@ -100,7 +109,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #0f172a; /* Dark background */
+  background-color: #0f172a;
   padding: 2rem;
 }
 
@@ -123,35 +132,6 @@
   color: var(--text-muted);
 }
 
-/* Role Toggle */
-.roleToggle {
-  background-color: var(--bg-panel);
-  padding: 4px;
-  border-radius: 12px;
-  display: flex;
-  margin-bottom: 2rem;
-  border: 1px solid var(--border-color);
-}
-
-.roleToggle button {
-  flex: 1;
-  padding: 10px;
-  border-radius: 8px;
-  color: var(--text-muted);
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.2s;
-}
-
-.activeRole {
-  background-color: var(--bg-panel-hover);
-  color: var(--text-main) !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-
 /* Inputs */
 .inputGroup {
   position: relative;
@@ -170,18 +150,42 @@
   width: 100%;
   background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
-  padding: 14px 16px 14px 48px; /* Left padding for icon */
+  padding: 14px 16px 14px 48px;
   border-radius: 12px;
   color: var(--text-main);
   font-size: 1rem;
   outline: none;
-  transition: border-color 0.2s;
+  transition: all 0.2s ease;
 }
 
 .inputGroup input:focus {
   border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
+/* Password toggle */
+.passwordToggle {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 5;
+  transition: color 0.2s;
+}
+
+.passwordToggle:hover {
+  color: var(--primary);
+}
+
+/* Options */
 .options {
   display: flex;
   justify-content: space-between;
@@ -203,6 +207,7 @@
   font-weight: 500;
 }
 
+/* Button */
 .submitBtn {
   width: 100%;
   background: linear-gradient(90deg, var(--primary), var(--primary-hover));
@@ -215,13 +220,18 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  transition: opacity 0.2s;
+  transition: all 0.2s ease;
 }
 
 .submitBtn:hover {
   opacity: 0.9;
 }
 
+.submitBtn:active {
+  transform: scale(0.98);
+}
+
+/* Footer */
 .footerText {
   text-align: center;
   margin-top: 2rem;
@@ -234,33 +244,17 @@
   font-weight: 600;
 }
 
-/* Mobile Responsive */
+/* Mobile */
 @media (max-width: 900px) {
   .brandSection {
     display: none;
   }
-}
-/* frontend/src/pages/auth/Auth.module.css */
 
-/* ... keep all existing css ... */
+  .formSection {
+    padding: 1.5rem;
+  }
 
-.passwordToggle {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: color 0.2s;
-  z-index: 5;
-}
-
-.passwordToggle:hover {
-  color: var(--primary);
+  .formWrapper {
+    max-width: 100%;
+  }
 }

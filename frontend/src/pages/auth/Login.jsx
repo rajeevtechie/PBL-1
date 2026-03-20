@@ -5,11 +5,9 @@ import {
   Mail, 
   Lock, 
   ArrowRight, 
-  Layout, 
-  BookOpen, 
   AlertCircle,
-  Eye,      // <--- NEW IMPORT
-  EyeOff    // <--- NEW IMPORT
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import styles from './Auth.module.css';
 
@@ -17,9 +15,8 @@ const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState('student');
-  const [showPassword, setShowPassword] = useState(false); // <--- NEW STATE
-  
+  const [showPassword, setShowPassword] = useState(false);
+
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -32,13 +29,21 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/login', formData);
+      const res = await axios.post(
+        'http://localhost:5000/api/auth/login',
+        formData
+      );
+
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
+
       navigate('/dashboard');
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      setError(
+        err.response?.data?.message ||
+        'Login failed. Please check your credentials.'
+      );
     } finally {
       setLoading(false);
     }
@@ -47,7 +52,7 @@ const Login = () => {
   return (
     <div className={styles.authContainer}>
       
-      {/* === LEFT SIDE: BRANDING SECTION === */}
+      {/* LEFT SIDE */}
       <div className={styles.brandSection}>
         <div className={styles.circle1}></div>
         <div className={styles.circle2}></div>
@@ -74,30 +79,13 @@ const Login = () => {
         </div>
       </div>
 
-      {/* === RIGHT SIDE: FORM SECTION === */}
+      {/* RIGHT SIDE */}
       <div className={styles.formSection}>
         <div className={styles.formWrapper}>
           
           <div className={styles.header}>
-            <h2>Welcome Back</h2>
+            <h2>Student Login</h2>
             <p>Please enter your details to sign in.</p>
-          </div>
-
-          <div className={styles.roleToggle}>
-            <button 
-              className={role === 'student' ? styles.activeRole : ''}
-              onClick={() => setRole('student')}
-              type="button"
-            >
-              <Layout size={18} /> Student
-            </button>
-            <button 
-              className={role === 'educator' ? styles.activeRole : ''}
-              onClick={() => setRole('educator')}
-              type="button"
-            >
-              <BookOpen size={18} /> Educator
-            </button>
           </div>
 
           {error && (
@@ -107,7 +95,10 @@ const Login = () => {
               padding: '10px', 
               borderRadius: '8px',
               marginBottom: '20px',
-              display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem'
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '0.9rem'
             }}>
               <AlertCircle size={16} /> {error}
             </div>
@@ -115,7 +106,7 @@ const Login = () => {
 
           <form onSubmit={handleLogin}>
             
-            {/* Email Input */}
+            {/* Email */}
             <div className={styles.inputGroup}>
               <Mail className={styles.inputIcon} size={20} />
               <input 
@@ -128,20 +119,19 @@ const Login = () => {
               />
             </div>
 
-            {/* Password Input (Updated with Toggle) */}
+            {/* Password */}
             <div className={styles.inputGroup}>
               <Lock className={styles.inputIcon} size={20} />
               <input 
-                type={showPassword ? "text" : "password"} // <--- DYNAMIC TYPE
+                type={showPassword ? "text" : "password"}
                 name="password" 
                 placeholder="Password" 
                 value={formData.password} 
                 onChange={handleChange} 
                 required 
-                style={{ paddingRight: '45px' }} // Prevent text overlapping icon
+                style={{ paddingRight: '45px' }}
               />
               
-              {/* <--- SHOW/HIDE BUTTON ---> */}
               <button 
                 type="button"
                 className={styles.passwordToggle}
@@ -158,7 +148,11 @@ const Login = () => {
               <a href="#" className={styles.forgotLink}>Forgot Password?</a>
             </div>
 
-            <button type="submit" className={styles.submitBtn} disabled={loading}>
+            <button 
+              type="submit" 
+              className={styles.submitBtn} 
+              disabled={loading}
+            >
               {loading ? "Signing in..." : "Sign in"} 
               <ArrowRight size={20} />
             </button>
