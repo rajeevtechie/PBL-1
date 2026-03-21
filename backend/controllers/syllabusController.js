@@ -165,49 +165,47 @@ exports.getCareerInsights = async (req, res) => {
     }
 };
 
-// --- GENERATE CAREER GAP ANALYSIS ---
+// --- GENERATE HOLISTIC CAREER GAP ANALYSIS (AGGREGATED) ---
 exports.generateCareerInsights = async (req, res) => {
     try {
         const userId = req.user.id;
-        let syllabusId = req.params.id; // Changed to let so we can modify it
         const { targetRole } = req.body; 
 
         if (!targetRole) {
             return res.status(400).json({ message: "Please provide a target career role." });
         }
 
-        let academicStructure;
+        // 1. Fetch ALL academic syllabuses for this user
+        const [rows] = await db.execute(
+            'SELECT course_title, structure FROM syllabuses WHERE user_id = ?',
+            [userId]
+        );
 
-        // 1. Fetch the existing academic syllabus (Handle "latest" logic)
-        if (syllabusId === 'latest') {
-            const [rows] = await db.execute(
-                'SELECT id, structure FROM syllabuses WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
-                [userId]
-            );
-            if (rows.length === 0) {
-                return res.status(404).json({ message: "No syllabus found to analyze." });
-            }
-            academicStructure = rows[0].structure;
-            syllabusId = rows[0].id; // Update to the real numeric ID
-        } else {
-            const [rows] = await db.execute(
-                'SELECT structure FROM syllabuses WHERE id = ? AND user_id = ?',
-                [syllabusId, userId]
-            );
-            if (rows.length === 0) {
-                return res.status(404).json({ message: "Syllabus not found." });
-            }
-            academicStructure = rows[0].structure;
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "No syllabuses found. Please upload at least one syllabus first." });
         }
 
-        // 2. The Prompt: Tailored to match your `roadmap_recommendations` table
+        // 2. Stitch them all together into a "Knowledge Portfolio"
+        const combinedCurriculum = rows.map(row => {
+            let parsedStructure = row.structure;
+            if (typeof parsedStructure === 'string') {
+                try { parsedStructure = JSON.parse(parsedStructure); } catch(e) { }
+            }
+            return {
+                subjectTitle: row.course_title,
+                content: parsedStructure
+            };
+        });
+
+        // 3. The Prompt: Now evaluating the COMBINED knowledge
         const prompt = `
         System: You are an elite tech industry career advisor.
-        Task: Analyze the following academic syllabus and compare it against the real-world requirements for a "${targetRole}". 
-        Identify 3 to 5 critical industry skills that are MISSING from the syllabus but are strictly required for this role.
+        Task: Analyze the following COMBINED academic curriculum (which represents everything this student has learned across multiple university subjects). 
+        Compare their total aggregated knowledge against the real-world industry requirements for a "${targetRole}". 
+        Identify 3 to 5 critical industry skills that are completely MISSING from their entire curriculum but are strictly required for this role.
         
-        Academic Syllabus:
-        ${typeof academicStructure === 'string' ? academicStructure : JSON.stringify(academicStructure)}
+        Student's Combined Curriculum:
+        ${JSON.stringify(combinedCurriculum)}
 
         Output Format: Strictly JSON. No markdown. No intro text.
         Schema:
@@ -222,17 +220,17 @@ exports.generateCareerInsights = async (req, res) => {
         }
         `;
 
-        // 3. Ask Gemini 2.0
-        console.log(`🧠 InsightED: Generating Career Gaps for ${targetRole}...`);
+        // 4. Ask Gemini
+        console.log(`🧠 InsightED: Aggregating ${rows.length} subjects to find gaps for ${targetRole}...`);
         const result = await model.generateContent(prompt);
         const response = await result.response;
         let text = response.text();
 
-        // 4. Clean & Parse JSON
+        // 5. Clean & Parse JSON
         text = text.replace(/```json/g, "").replace(/```/g, "").trim();
         const careerJson = JSON.parse(text);
 
-        // 5. Save Target Role to `career_goals` table
+        // 6. Save Target Role to \`career_goals\` table
         await db.execute(
             `INSERT INTO career_goals (user_id, target_role) 
              VALUES (?, ?) 
@@ -240,7 +238,7 @@ exports.generateCareerInsights = async (req, res) => {
             [userId, targetRole, targetRole]
         );
 
-        // 6. Save Skills to `roadmap_recommendations` table
+        // 7. Save Skills to \`roadmap_recommendations\` table
         await db.execute('DELETE FROM roadmap_recommendations WHERE user_id = ?', [userId]);
 
         for (const skill of careerJson.missingSkills) {
@@ -252,12 +250,12 @@ exports.generateCareerInsights = async (req, res) => {
         }
 
         res.status(200).json({ 
-            message: "Career insights generated successfully",
+            message: "Holistic career insights generated successfully",
             recommendations: careerJson.missingSkills 
         });
 
     } catch (error) {
-        console.error("❌ Error generating career insights:", error);
+        console.error("❌ Error generating holistic career insights:", error);
         res.status(500).json({ message: "AI Analysis Failed", error: error.message });
     }
 };

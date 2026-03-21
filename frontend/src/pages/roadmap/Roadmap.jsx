@@ -2,18 +2,21 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { 
   BookOpen, Briefcase, CheckCircle, Circle, Lock, 
-  AlertTriangle, Loader2, ChevronRight, Sparkles, Target
+  AlertTriangle, Loader2, ChevronRight, Sparkles, Target, Edit2 // <-- Added Edit2 here
 } from 'lucide-react';
 import styles from './Roadmap.module.css';
 
 const Roadmap = () => {
   const [roadmap, setRoadmap] = useState(null);
-  const [careerData, setCareerData] = useState(null); // NEW: Holds career gaps
+  const [careerData, setCareerData] = useState(null); 
   
   const [loading, setLoading] = useState(true);
-  const [analyzing, setAnalyzing] = useState(false); // NEW: Loading state for AI
-  const [targetRole, setTargetRole] = useState("");  // NEW: Input state
+  const [analyzing, setAnalyzing] = useState(false); 
+  const [targetRole, setTargetRole] = useState("");  
   const [error, setError] = useState('');
+  
+  // --- NEW: Edit Mode State ---
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
   
   const [expandedUnits, setExpandedUnits] = useState({});
 
@@ -48,7 +51,10 @@ const Roadmap = () => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             setCareerData(resCareer.data);
-        } catch  {
+            if (resCareer.data.targetRole) {
+                setTargetRole(resCareer.data.targetRole); // Pre-fill the input box
+            }
+        } catch {
             console.log("No career data yet, that's fine!");
         }
 
@@ -62,14 +68,12 @@ const Roadmap = () => {
     fetchData();
   }, []);
 
-  // --- NEW: Handle AI Generation ---
+  // --- Handle AI Generation ---
   const handleAnalyzeGaps = async () => {
     if (!targetRole.trim()) {
         alert("Please enter a target role first!"); return;
     }
     
-    // We need the current syllabus ID. If activeSyllabusId isn't set, we assume they are on their latest one.
-    // To be safe, let's grab it from local storage, or fallback to 'latest'
     const activeId = localStorage.getItem('activeSyllabusId') || 'latest';
     
     setAnalyzing(true);
@@ -85,6 +89,10 @@ const Roadmap = () => {
             targetRole: targetRole,
             recommendations: response.data.recommendations
         });
+        
+        // --- NEW: Turn off edit mode after successful generation ---
+        setIsEditingGoal(false);
+
     } catch (err) {
         console.error(err);
         alert("Failed to analyze gaps. Make sure you are using a specific syllabus ID.");
@@ -148,27 +156,46 @@ const Roadmap = () => {
 
         {/* === RIGHT COLUMN: CAREER TRACK === */}
         <section className={styles.trackColumn}>
-          <div className={styles.trackHeader}>
-            <div className={styles.iconBox}><Briefcase size={24} /></div>
-            <div>
-              <h2>Career Track</h2>
-              <span className={styles.subLabel}>
-                 {careerData?.targetRole ? `Gaps for ${careerData.targetRole}` : "Market Gap Analysis"}
-              </span>
+          <div className={styles.trackHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+              <div className={styles.iconBox}><Briefcase size={24} /></div>
+              <div>
+                <h2>Career Track</h2>
+                <span className={styles.subLabel}>
+                   {careerData?.targetRole && !isEditingGoal ? `Gaps for ${careerData.targetRole}` : "Market Gap Analysis"}
+                </span>
+              </div>
             </div>
+            
+            {/* --- NEW: The Edit Goal Button --- */}
+            {careerData?.targetRole && (
+                <button 
+                  onClick={() => setIsEditingGoal(!isEditingGoal)}
+                  style={{
+                      background: 'transparent', border: '1px solid #334155', color: '#cbd5e1', 
+                      padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', 
+                      display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem',
+                      transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.background = '#334155'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <Edit2 size={14} /> {isEditingGoal ? "Cancel" : "Edit Goal"}
+                </button>
+            )}
           </div>
 
           <div className={styles.timeline}>
               
-              {/* IF NO CAREER DATA YET: SHOW GENERATOR FORM */}
-              {(!careerData || !careerData.recommendations || careerData.recommendations.length === 0) ? (
+              {/* IF NO CAREER DATA YET OR IF USER IS EDITING: SHOW GENERATOR FORM */}
+              {(!careerData || !careerData.recommendations || careerData.recommendations.length === 0 || isEditingGoal) ? (
                   <div className={`${styles.node} ${styles.aiNode}`}>
                     <div className={styles.line}></div>
                     <div className={styles.marker}><Sparkles size={18} /></div>
                     <div className={styles.content}>
                       <h3>Generate Career Insights</h3>
                       <p className={styles.aiDescription}>
-                          What is your dream job? We will compare your syllabus against industry requirements to find the missing skills.
+                          What is your goal? Try typing a specific job (<strong>Data Scientist</strong>) or an objective (<strong>Java Interview Prep</strong>).
                       </p>
                       
                       <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
@@ -192,7 +219,7 @@ const Roadmap = () => {
                     </div>
                   </div>
               ) : (
-                  /* IF CAREER DATA EXISTS: SHOW THE TIMELINE OF GAPS */
+                  /* IF CAREER DATA EXISTS AND NOT EDITING: SHOW THE TIMELINE OF GAPS */
                   careerData.recommendations.map((rec, index) => (
                       <div key={index} className={styles.node}>
                         <div className={styles.line}></div>
