@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+select * from users;
+
 CREATE TABLE IF NOT EXISTS syllabuses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
