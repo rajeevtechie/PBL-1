@@ -1,61 +1,86 @@
-const db = require('../config/db');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const db = require('../config/db');
+require('dotenv').config();
 
-// REGISTER
+// --- REGISTER USER ---
 exports.register = async (req, res) => {
-  const { name, email, password } = req.body;
+    try {
+        // Note: We extract name, email, and password from the frontend request.
+        // Even if your frontend sends 'university', we are only saving what is in your DB schema.
+        const { name, email, password } = req.body;
 
-  try {
-    // 1. Check if user already exists
-    const [existing] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-    if (existing.length > 0) return res.status(400).json({ message: "Email already exists" });
+        if (!name || !email || !password) {
+            return res.status(400).json({ message: "Please provide all required fields." });
+        }
 
-    // 2. Encrypt the password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+        // 1. Check if user already exists
+        const [existingUsers] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+        if (existingUsers.length > 0) {
+            return res.status(400).json({ message: "User already exists with this email." });
+        }
 
-    // 3. Save to Database
-    // CORRECT: Inserting into 'password'
-    await db.execute(
-      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
-      [name, email, hashedPassword]
-    );
+        // 2. Hash the password for security
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
-    res.status(201).json({ message: "User registered successfully!" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });;
-  }
+        // 3. Save user to database (✅ FIXED: Using 'password_hash' column)
+        const [result] = await db.execute(
+            'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
+            [name, email, hashedPassword]
+        );
+
+        // 4. Generate JWT Token
+        const token = jwt.sign({ id: result.insertId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        res.status(201).json({
+            message: "Account created successfully",
+            token,
+            user: { id: result.insertId, name, email }
+        });
+
+    } catch (error) {
+        console.error("❌ Registration Error:", error);
+        res.status(500).json({ message: "Server error during registration", error: error.message });
+    }
 };
 
-// LOGIN
+// --- LOGIN USER ---
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
+    try {
+        const { email, password } = req.body;
 
-  try {
-    // 1. Find the user
-    const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-    if (users.length === 0) return res.status(400).json({ message: "Invalid credentials" });
+        if (!email || !password) {
+            return res.status(400).json({ message: "Please provide email and password." });
+        }
 
-    const user = users[0];
+        // 1. Find user by email
+        const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+        
+        if (users.length === 0) {
+            return res.status(401).json({ message: "Invalid email or password." });
+        }
 
-    // 2. Check Password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+        const user = users[0];
 
-    // 3. Create Token
-    const token = jwt.sign(
-      { id: user.id },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+        // 2. Compare passwords (✅ FIXED: Comparing against 'user.password_hash')
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+        
+        if (!isMatch) {
+            return res.status(401).json({ message: "Invalid email or password." });
+        }
 
-    // 4. Send back the Token and User Info
-    res.json({
-      token,
-      user: { id: user.id, name: user.name, email: user.email }
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+        // 3. Generate JWT Token
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        res.status(200).json({
+            message: "Login successful",
+            token,
+            user: { id: user.id, name: user.name, email: user.email }
+        });
+
+    } catch (error) {
+        console.error("❌ Login Error:", error);
+        res.status(500).json({ message: "Server error during login", error: error.message });
+    }
 };
