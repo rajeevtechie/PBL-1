@@ -164,16 +164,24 @@ const Register = () => {
               />
             </div>
 
-            {/* Terms */}
+            {/* UPDATED TERMS & CONDITIONS LINK */}
             <div className={styles.terms}>
-              <label className={styles.termsLabel}>
+              <label className={styles.termsLabel} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <input 
                   type="checkbox"
                   checked={agree}
                   onChange={(e) => setAgree(e.target.checked)}
                 />
                 <span>
-                  I agree to <span className={styles.link}>Terms & Conditions</span>
+                  I agree to the{' '}
+                  <Link 
+                    to="/terms" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className={styles.link}
+                  >
+                    Terms & Conditions
+                  </Link>
                 </span>
               </label>
             </div>
