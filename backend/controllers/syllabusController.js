@@ -249,13 +249,35 @@ exports.generateCareerInsights = async (req, res) => {
             );
         }
 
+        // 8. Fetch the newly inserted records to get their Database IDs!
+        const [newRecs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ?', [userId]);
+
         res.status(200).json({ 
             message: "Holistic career insights generated successfully",
-            recommendations: careerJson.missingSkills 
+            recommendations: newRecs // Send back the actual database rows, not just the AI text
         });
 
     } catch (error) {
         console.error("❌ Error generating holistic career insights:", error);
         res.status(500).json({ message: "AI Analysis Failed", error: error.message });
+    }
+};
+
+// --- TOGGLE RECOMMENDATION COMPLETION ---
+exports.toggleRecommendation = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const recId = req.params.recId;
+        const { isCompleted } = req.body; 
+
+        await db.execute(
+            'UPDATE roadmap_recommendations SET is_completed = ? WHERE id = ? AND user_id = ?',
+            [isCompleted ? 1 : 0, recId, userId]
+        );
+
+        res.status(200).json({ message: "Status updated successfully" });
+    } catch (error) {
+        console.error("❌ Error toggling recommendation:", error);
+        res.status(500).json({ message: "Failed to update status" });
     }
 };

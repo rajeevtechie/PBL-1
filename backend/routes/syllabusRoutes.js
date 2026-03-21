@@ -19,14 +19,13 @@ router.post(
 // --- STATIC GET ROUTES (Must go BEFORE /:id) ---
 router.get('/latest', authMiddleware, syllabusController.getLatestSyllabus);
 router.get('/list', authMiddleware, syllabusController.listAllSyllabuses);
-
-// ✅ NEW: Fetch saved career insights 
 router.get('/career-insights', authMiddleware, syllabusController.getCareerInsights);
+
+// ✅ NEW: Toggle Checkbox Status
+router.patch('/recommendation/:recId/toggle', authMiddleware, syllabusController.toggleRecommendation);
 
 // --- DYNAMIC ROUTES (Containing :id) ---
 router.get('/:id', authMiddleware, syllabusController.getSyllabusById);
-
-// ✅ NEW: Generate AI Gap Analysis
 router.post('/:id/analyze', authMiddleware, syllabusController.generateCareerInsights);
 
 module.exports = router;
