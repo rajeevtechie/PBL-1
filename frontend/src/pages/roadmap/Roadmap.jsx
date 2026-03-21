@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { 
   BookOpen, Briefcase, CheckCircle, Circle, Lock, 
-  AlertTriangle, Loader2, ChevronRight, Sparkles, Target, Edit2 // <-- Added Edit2 here
+  AlertTriangle, Loader2, ChevronRight, Sparkles, Target, Edit2
 } from 'lucide-react';
 import styles from './Roadmap.module.css';
 
@@ -15,9 +15,7 @@ const Roadmap = () => {
   const [targetRole, setTargetRole] = useState("");  
   const [error, setError] = useState('');
   
-  // --- NEW: Edit Mode State ---
   const [isEditingGoal, setIsEditingGoal] = useState(false);
-  
   const [expandedUnits, setExpandedUnits] = useState({});
 
   const toggleUnit = (index) => {
@@ -45,16 +43,16 @@ const Roadmap = () => {
         });
         setRoadmap(resSyllabus.data);
 
-        // 2. Fetch Career Insights (if any exist)
+        // 2. Fetch Career Insights
         try {
             const resCareer = await axios.get('http://localhost:5000/api/syllabus/career-insights', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             setCareerData(resCareer.data);
             if (resCareer.data.targetRole) {
-                setTargetRole(resCareer.data.targetRole); // Pre-fill the input box
+                setTargetRole(resCareer.data.targetRole);
             }
-        } catch {
+        } catch  {
             console.log("No career data yet, that's fine!");
         }
 
@@ -74,30 +72,51 @@ const Roadmap = () => {
         alert("Please enter a target role first!"); return;
     }
     
-    const activeId = localStorage.getItem('activeSyllabusId') || 'latest';
-    
     setAnalyzing(true);
     try {
         const token = localStorage.getItem('token');
-        const response = await axios.post(`http://localhost:5000/api/syllabus/${activeId}/analyze`, 
+        const response = await axios.post(`http://localhost:5000/api/syllabus/latest/analyze`, 
             { targetRole: targetRole },
             { headers: { 'Authorization': `Bearer ${token}` }}
         );
         
-        // Update UI with new data
         setCareerData({
             targetRole: targetRole,
             recommendations: response.data.recommendations
         });
-        
-        // --- NEW: Turn off edit mode after successful generation ---
         setIsEditingGoal(false);
 
     } catch (err) {
         console.error(err);
-        alert("Failed to analyze gaps. Make sure you are using a specific syllabus ID.");
+        alert("Failed to analyze gaps.");
     } finally {
         setAnalyzing(false);
+    }
+  };
+
+  // --- NEW: Handle Checkbox Toggle ---
+  const handleToggleComplete = async (recId, currentStatus) => {
+    try {
+        const token = localStorage.getItem('token');
+        const newStatus = !currentStatus;
+
+        // 1. Optimistic UI Update (Change it instantly on screen)
+        setCareerData(prev => ({
+            ...prev,
+            recommendations: prev.recommendations.map(rec => 
+                rec.id === recId ? { ...rec, is_completed: newStatus } : rec
+            )
+        }));
+
+        // 2. Tell the backend to save the change in the database
+        await axios.patch(`http://localhost:5000/api/syllabus/recommendation/${recId}/toggle`, 
+            { isCompleted: newStatus },
+            { headers: { 'Authorization': `Bearer ${token}` }}
+        );
+    } catch (err) {
+        console.error("Failed to update status", err);
+        // Revert UI if the network request fails
+        alert("Failed to save progress. Please try again.");
     }
   };
 
@@ -167,7 +186,7 @@ const Roadmap = () => {
               </div>
             </div>
             
-            {/* --- NEW: The Edit Goal Button --- */}
+            {/* The Edit Goal Button */}
             {careerData?.targetRole && (
                 <button 
                   onClick={() => setIsEditingGoal(!isEditingGoal)}
@@ -187,7 +206,7 @@ const Roadmap = () => {
 
           <div className={styles.timeline}>
               
-              {/* IF NO CAREER DATA YET OR IF USER IS EDITING: SHOW GENERATOR FORM */}
+              {/* FORM VIEW */}
               {(!careerData || !careerData.recommendations || careerData.recommendations.length === 0 || isEditingGoal) ? (
                   <div className={`${styles.node} ${styles.aiNode}`}>
                     <div className={styles.line}></div>
@@ -219,14 +238,35 @@ const Roadmap = () => {
                     </div>
                   </div>
               ) : (
-                  /* IF CAREER DATA EXISTS AND NOT EDITING: SHOW THE TIMELINE OF GAPS */
-                  careerData.recommendations.map((rec, index) => (
-                      <div key={index} className={styles.node}>
+                  /* TIMELINE VIEW WITH CLICKABLE CHECKBOXES */
+                  careerData.recommendations.map((rec) => (
+                      <div key={rec.id} className={styles.node}>
                         <div className={styles.line}></div>
-                        <div className={styles.marker} style={{ color: 'var(--secondary)', backgroundColor: 'rgba(236, 72, 153, 0.1)' }}>
-                            <Target size={16} />
+                        
+                        {/* THE CLICKABLE MARKER */}
+                        <div 
+                            className={styles.marker} 
+                            onClick={() => handleToggleComplete(rec.id, rec.is_completed)}
+                            style={{ 
+                                cursor: 'pointer',
+                                color: rec.is_completed ? '#10b981' : 'var(--secondary)', 
+                                backgroundColor: rec.is_completed ? 'rgba(16, 185, 129, 0.1)' : 'rgba(236, 72, 153, 0.1)',
+                                transition: 'all 0.3s ease',
+                                border: rec.is_completed ? 'none' : '2px solid transparent'
+                            }}
+                            title="Click to mark as complete!"
+                        >
+                            {rec.is_completed ? <CheckCircle size={18} /> : <Circle size={16} />}
                         </div>
-                        <div className={styles.content}>
+
+                        {/* THE CONTENT (Dims and strikes through when finished) */}
+                        <div 
+                            className={styles.content}
+                            style={{ 
+                                opacity: rec.is_completed ? 0.4 : 1,
+                                transition: 'opacity 0.3s ease'
+                            }}
+                        >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                               <span style={{ fontSize: '0.8rem', color: 'var(--secondary)', textTransform: 'uppercase', fontWeight: 'bold' }}>
                                   {rec.category}
@@ -241,9 +281,16 @@ const Roadmap = () => {
                                   {rec.importance_level}
                               </span>
                           </div>
-                          <h3 style={{ margin: 0 }}>{rec.topic_name}</h3>
+                          
+                          <h3 style={{ 
+                              margin: 0, 
+                              textDecoration: rec.is_completed ? 'line-through' : 'none' 
+                          }}>
+                              {rec.topic_name}
+                          </h3>
+                          
                           <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                              Industry standard requirement for {careerData.targetRole}.
+                              {rec.is_completed ? "Completed! Great job." : `Industry requirement for ${careerData.targetRole}.`}
                           </p>
                         </div>
                       </div>
