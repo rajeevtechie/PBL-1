@@ -1,4 +1,5 @@
 import React from 'react';
+import Terms from './pages/Terms/Terms';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // === LAYOUTS ===
@@ -35,9 +36,10 @@ function App() {
         
         {/* Auth Pages */}
         <Route path="/login" element={<Login />} />
-        
-        {/* ✅ CORRECTED: Now points to the Register component */}
         <Route path="/register" element={<Register />} />
+
+        {/* ✅ NEW TERMS & CONDITIONS ROUTE HERE */}
+        <Route path="/terms" element={<Terms />} />
 
 
         {/* ====================================================
