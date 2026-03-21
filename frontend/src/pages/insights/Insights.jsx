@@ -1,6 +1,7 @@
 import React from 'react';
 import { Lightbulb, TrendingUp, AlertTriangle, ArrowRight, MessageSquare, Send } from 'lucide-react';
 import styles from './Insights.module.css';
+import Chatbot from '../../Components/Chatbot';
 
 const Insights = () => {
   return (
@@ -61,38 +62,10 @@ const Insights = () => {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: AI Mentor Chat */}
-      <div className={styles.chatColumn}>
-        <div className={styles.chatHeader}>
-          <h3>EduNexus AI Mentor</h3>
-          <span className={styles.onlineDot}></span>
-        </div>
-        
-        <div className={styles.chatWindow}>
-          {/* AI Message */}
-          <div className={`${styles.message} ${styles.aiMessage}`}>
-            <p>Hello Rajeev! I noticed you struggled with <strong>Redux Reducers</strong> yesterday. Would you like a quick visualization to explain it?</p>
-            <span className={styles.time}>10:05 AM</span>
-          </div>
-
-          {/* User Message */}
-          <div className={`${styles.message} ${styles.userMessage}`}>
-            <p>Yes, specifically how the state updates immutably.</p>
-            <span className={styles.time}>10:06 AM</span>
-          </div>
-
-          {/* AI Response */}
-          <div className={`${styles.message} ${styles.aiMessage}`}>
-            <p>Sure! Imagine the state is a snapshot. You don't scribble on the photo; you take a new photo with the changes included...</p>
-            <span className={styles.time}>10:06 AM</span>
-          </div>
-        </div>
-
-        <div className={styles.chatInputArea}>
-          <input type="text" placeholder="Ask anything..." />
-          <button><Send size={18} /></button>
-        </div>
-      </div>
+{/* RIGHT COLUMN: AI Mentor Chat */}
+<div className={styles.chatColumn}>
+  <Chatbot />
+</div>
 
     </div>
   );
