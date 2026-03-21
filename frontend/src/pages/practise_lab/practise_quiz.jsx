@@ -1,5 +1,7 @@
+// frontend/src/pages/practise_lab/practise_quiz.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Timer } from 'lucide-react'; // Added Timer Icon
 import styles from './practise_lab.module.css';
 
 const RESULTS_KEY = 'practiceQuizResults';
@@ -114,6 +116,7 @@ const PractiseQuiz = () => {
         </section>
       )}
 
+      {/* --- UPDATED ACTION ROW WITH FOCUS JUMP --- */}
       <div className={styles.quizActionRow}>
         <button
           className={styles.finalAction}
@@ -122,6 +125,17 @@ const PractiseQuiz = () => {
         >
           {isGenerating ? 'Generating...' : 'Generate 5 More'}
         </button>
+
+        {/* This button seamlessly connects Practice Lab -> Focus Mode */}
+        <button
+          className={styles.secondaryAction}
+          onClick={() => navigate('/study')}
+          style={{ marginLeft: 'auto', background: '#3b82f6', color: 'white', border: 'none' }}
+        >
+          <Timer size={18} style={{ marginRight: '8px' }}/> 
+          Start Focus Session
+        </button>
+
         {generateError && (
           <div className={styles.generateError}>{generateError}</div>
         )}

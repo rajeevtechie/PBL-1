@@ -11,8 +11,7 @@ const practiceRoutes = require('./routes/practiceRoutes');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
+const PORT = 5000;
 // --- Middleware ---
 app.use(cors());
 app.use(express.json());
@@ -23,6 +22,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/auth', authRoutes);       // Login & Register
 app.use('/api/syllabus', syllabusRoutes); // AI & Uploads
 app.use('/api/practice', practiceRoutes); // Practice Lab
+const focusRoutes = require('./routes/focusRoutes');
+app.use('/api/focus', focusRoutes);
 
 // --- Test Route ---
 app.get('/', (req, res) => {
