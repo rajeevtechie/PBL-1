@@ -2,15 +2,23 @@ import React, { useState } from 'react';
 import { Play, TrendingUp, Clock, ArrowRight, BookOpen, Briefcase, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UploadModal from '../../Components/common/UploadModal/UploadModal'; 
-import SubjectLibrary from '../../Components/common/SubjectLibrary/SubjectLibrary'; // <-- NEW IMPORT
+import SubjectLibrary from '../../Components/common/SubjectLibrary/SubjectLibrary';
 import styles from './Dashboard.module.css';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false); 
 
-  // Function to run when upload finishes
-  const handleRoadmapReady = () => {
+  // --- FIXED: Function to run when upload finishes ---
+  const handleRoadmapReady = (newSyllabusId) => {
+    // If the modal gives us a specific ID, save it. 
+    // Otherwise, clear the memory so the Roadmap page knows to fetch the 'latest' one!
+    if (newSyllabusId && typeof newSyllabusId === 'string') {
+        localStorage.setItem('activeSyllabusId', newSyllabusId);
+    } else {
+        localStorage.removeItem('activeSyllabusId'); 
+    }
+    
     setIsModalOpen(false);
     navigate('/roadmap'); 
   };
@@ -60,7 +68,7 @@ const Dashboard = () => {
         </button>
       </section>
 
-      {/* --- NEW: MULTI-SUBJECT LIBRARY COMPONENT --- */}
+      {/* --- MULTI-SUBJECT LIBRARY COMPONENT --- */}
       <section style={{ gridColumn: '1 / -1' }}>
         <SubjectLibrary />
       </section>
@@ -140,8 +148,8 @@ const Dashboard = () => {
             <ArrowRight size={16} />
          </div>
          <p className={styles.insightText}>
-           "Rajeev, you are spending 40% of time on Planning but only 20% on Deep Work. 
-           Try shifting Data Structures to your 10 PM slot."
+            "Rajeev, you are spending 40% of time on Planning but only 20% on Deep Work. 
+            Try shifting Data Structures to your 10 PM slot."
          </p>
       </section>
 
