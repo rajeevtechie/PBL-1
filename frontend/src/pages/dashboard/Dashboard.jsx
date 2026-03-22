@@ -10,16 +10,14 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false); 
 
-  // --- DYNAMIC ANALYTICS & PROGRESS STATE ---
   const [loading, setLoading] = useState(true); 
   const [roadmap, setRoadmap] = useState(null);
   const [careerData, setCareerData] = useState(null);
   
-  // Holds the averages AND the detailed breakdown array from the backend
   const [aggregateProgress, setAggregateProgress] = useState({ academic: 0, career: 0, details: [] });
   
-  // Tracks which card is clicked open ('academic', 'career', or null)
-  const [expandedTrack, setExpandedTrack] = useState(null);
+  // ✅ FIXED: Now tracks the open/close state of BOTH cards independently!
+  const [expandedTracks, setExpandedTracks] = useState({ academic: false, career: false });
   
   const [metrics, setMetrics] = useState({
     avgFocus: 0,
@@ -30,20 +28,17 @@ const Dashboard = () => {
 
   const userName = localStorage.getItem('userName') || 'There';
 
-  // --- FETCH ALL DATA ON MOUNT ---
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        // Fetch Analytics
         try {
             const resMetrics = await axios.get('http://localhost:5000/api/insights/dashboard', { headers: { Authorization: `Bearer ${token}` } });
             if (resMetrics.data.success) setMetrics(resMetrics.data.data);
         } catch { console.log("No analytics data yet."); }
 
-        // Fetch Current Roadmap Context
         const activeId = localStorage.getItem('activeSyllabusId');
         const endpoint = activeId ? `http://localhost:5000/api/syllabus/${activeId}` : 'http://localhost:5000/api/syllabus/latest';
         
@@ -58,7 +53,6 @@ const Dashboard = () => {
             setCareerData(resCareer.data);
         } catch { console.log("No career data yet."); }
 
-        // Fetch Aggregate Progress & Drill-down Details
         try {
             const resAggregate = await axios.get('http://localhost:5000/api/syllabus/progress/aggregate', { headers: { 'Authorization': `Bearer ${token}` } });
             if(resAggregate.data) {
@@ -90,20 +84,29 @@ const Dashboard = () => {
     navigate('/roadmap'); 
   };
 
-  // --- DYNAMIC CALCULATIONS ---
-  const nextAcademic = roadmap?.units?.find(u => !u.is_completed && !u.completed && u.is_completed !== 1 && u.completed !== 1)?.title || "All Caught Up!";
-  const nextCareer = careerData?.recommendations?.find(r => !r.is_completed && r.is_completed !== 1)?.topic_name || "Ready for Industry!";
-  const activeAcademicName = roadmap?.courseTitle || "No Active Subject";
+  const nextAcademicUnit = roadmap?.units?.find(u => !u.is_completed && !u.completed && u.is_completed !== 1 && u.completed !== 1);
+  const nextCareerRec = careerData?.recommendations?.find(r => !r.is_completed && r.is_completed !== 1);
 
-  // Toggle function for Accordion
+  let displayTask = "Review Session";
+  let displayReason = "You're all caught up! Great time to review.";
+
+  if (nextAcademicUnit) {
+      displayTask = nextAcademicUnit.title;
+      displayReason = `Continue your academic progress in ${roadmap?.courseTitle || 'your subject'}.`;
+  } else if (nextCareerRec) {
+      displayTask = nextCareerRec.topic_name;
+      displayReason = `Industry gap identified for ${careerData?.targetRole || 'your career goal'}.`;
+  }
+
+  // ✅ FIXED: Toggle function perfectly flips independent boolean states
   const toggleTrack = (trackName) => {
-      setExpandedTrack(expandedTrack === trackName ? null : trackName);
+      setExpandedTracks(prev => ({ ...prev, [trackName]: !prev[trackName] }));
   };
 
   if (loading) {
       return (
         <div className={styles.dashboardGrid} style={{display: 'flex', justifyContent: 'center', marginTop: '50px'}}>
-          <Loader2 className={styles.spin} size={48} color="#3b82f6" />
+          <Loader2 className={styles.spinner || "spinner"} size={48} color="#3b82f6" />
         </div>
       );
   }
@@ -111,57 +114,68 @@ const Dashboard = () => {
   return (
     <div className={styles.dashboardGrid}>
       
-      {/* HERO SECTION */}
-      <section className={`${styles.heroSection} ${styles.animateFadeInUp}`}>
+      <section className={`${styles.heroSection} ${styles.animateFadeInUp || ''}`}>
         <div className={styles.heroHeader}>
           <span className={styles.heroBadge}>Dynamic Next Task</span>
-          <span className={styles.heroUrgency}>
-            {metrics.peakTime !== "Analyzing..." ? `Optimal Focus Window: ${metrics.peakTime}` : "Analyzing your study habits..."}
+          
+          <span className={styles.heroUrgency} style={{ color: metrics.peakTime === "Analyzing..." ? '#f59e0b' : '#10b981' }}>
+            {metrics.peakTime !== "Analyzing..." ? `Optimal Focus Window: ${metrics.peakTime}` : "Optimal Focus Window: Not enough data"}
           </span>
           
           <button 
             onClick={() => setIsModalOpen(true)}
-            className={styles.btnPulseHover}
+            className={styles.btnPulseHover || ''}
             style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.8rem', fontWeight: '500'}}
           >
             <Upload size={14} /> Upload Syllabus
           </button>
         </div>
         
-        <h1 className={styles.taskTitle}>Study: {nextAcademic !== "All Caught Up!" ? nextAcademic : "Review Session"}</h1>
-        <p className={styles.taskReason}>
-          {nextAcademic !== "All Caught Up!" ? `Continue your progress in ${activeAcademicName}.` : `You have successfully completed all units in ${activeAcademicName}!`}
-        </p>
+        <h1 className={styles.taskTitle}>Study: {displayTask}</h1>
+        <p className={styles.taskReason}>{displayReason}</p>
 
-        <button className={`${styles.startBtn} ${styles.btnPulseHover}`} onClick={() => navigate('/roadmap')}>
-          <Play size={20} fill="currentColor" /> <span>Resume Roadmap</span>
-        </button>
+        <div style={{ display: 'flex', gap: '15px', marginTop: '20px', flexWrap: 'wrap' }}>
+            <button 
+              className={`${styles.startBtn} ${styles.btnPulseHover || ''}`} 
+              onClick={() => navigate('/focus', { state: { defaultSubject: roadmap?.courseTitle, defaultTask: displayTask } })}
+              style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600' }}
+            >
+              <Play size={20} fill="currentColor" />
+              <span>Start Focused Session</span>
+            </button>
+            
+            <button 
+              onClick={() => navigate('/roadmap')}
+              style={{ background: 'transparent', color: '#cbd5e1', border: '1px solid #334155', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: '500', transition: 'all 0.2s' }}
+              onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              View Roadmap
+            </button>
+        </div>
       </section>
 
-      {/* MULTI-SUBJECT LIBRARY COMPONENT */}
-      <section className={styles.animateFadeInUp} style={{ gridColumn: '1 / -1', animationDelay: '0.1s' }}>
+      <section className={styles.animateFadeInUp || ''} style={{ gridColumn: '1 / -1', animationDelay: '0.1s' }}>
         <SubjectLibrary />
       </section>
 
       {/* --- ACADEMIC TRACK ACCORDION --- */}
-      <section className={`${styles.trackCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.2s', cursor: 'pointer', transition: 'all 0.3s ease' }} onClick={() => toggleTrack('academic')}>
+      <section className={`${styles.trackCard} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.2s', cursor: 'pointer', transition: 'all 0.3s ease' }} onClick={() => toggleTrack('academic')}>
         <div className={styles.cardHeader}>
           <div className={styles.trackTitle}>
             <BookOpen size={18} /> <h3 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>Overall Academic</h3>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span className={styles.trackPercent}>{aggregateProgress.academic}%</span>
-              {expandedTrack === 'academic' ? <ChevronUp size={18} color="#94a3b8"/> : <ChevronDown size={18} color="#94a3b8"/>}
+              {expandedTracks.academic ? <ChevronUp size={18} color="#94a3b8"/> : <ChevronDown size={18} color="#94a3b8"/>}
           </div>
         </div>
         
         <div className={styles.progressBar}>
           <div className={styles.progressFill} style={{ width: `${aggregateProgress.academic}%`, backgroundColor: 'var(--primary)', transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)' }}></div>
         </div>
-        <p className={styles.cardSubtext}>Next: {nextAcademic}</p>
 
-        {/* Expandable Breakdown */}
-        {expandedTrack === 'academic' && (
+        {expandedTracks.academic && (
             <div onClick={(e) => e.stopPropagation()} style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 'bold' }}>Progress by Subject</span>
                 {aggregateProgress.details.map(detail => (
@@ -180,24 +194,22 @@ const Dashboard = () => {
       </section>
 
       {/* --- CAREER TRACK ACCORDION --- */}
-      <section className={`${styles.trackCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.3s', cursor: 'pointer', transition: 'all 0.3s ease' }} onClick={() => toggleTrack('career')}>
+      <section className={`${styles.trackCard} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.3s', cursor: 'pointer', transition: 'all 0.3s ease' }} onClick={() => toggleTrack('career')}>
         <div className={styles.cardHeader}>
            <div className={styles.trackTitle}>
             <Briefcase size={18} /> <h3 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>Overall Career</h3>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span className={styles.trackPercent}>{aggregateProgress.career}%</span>
-              {expandedTrack === 'career' ? <ChevronUp size={18} color="#94a3b8"/> : <ChevronDown size={18} color="#94a3b8"/>}
+              {expandedTracks.career ? <ChevronUp size={18} color="#94a3b8"/> : <ChevronDown size={18} color="#94a3b8"/>}
           </div>
         </div>
 
         <div className={styles.progressBar}>
           <div className={styles.progressFill} style={{ width: `${aggregateProgress.career}%`, backgroundColor: 'var(--secondary)', transition: 'width 1s cubic-bezier(0.4, 0, 0.2, 1)' }}></div>
         </div>
-        <p className={styles.cardSubtext} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Next: {nextCareer}</p>
 
-        {/* Expandable Breakdown */}
-        {expandedTrack === 'career' && (
+        {expandedTracks.career && (
             <div onClick={(e) => e.stopPropagation()} style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 'bold' }}>Progress by Subject</span>
                 {aggregateProgress.details.map(detail => (
@@ -216,7 +228,7 @@ const Dashboard = () => {
       </section>
 
       {/* DYNAMIC CONSISTENCY GRAPH */}
-      <section className={`${styles.consistencySection} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.4s' }}>
+      <section className={`${styles.consistencySection} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.4s' }}>
         <div className={styles.sectionTitle}><TrendingUp size={18} /> <span>Focus & Consistency</span></div>
         <div className={styles.statsRow}>
           <div className={styles.statItem}><span className={styles.statValue}>{metrics.avgFocus}%</span> <span className={styles.statLabel}>Avg Focus</span></div>
@@ -231,14 +243,14 @@ const Dashboard = () => {
       </section>
 
       {/* DYNAMIC FLOW STATE INDICATOR */}
-      <section className={`${styles.flowCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.5s' }}>
+      <section className={`${styles.flowCard} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.5s' }}>
          <div className={styles.sectionTitle}><Clock size={18} /> <span>Peak Productivity</span></div>
          <div className={styles.flowTime}>{metrics.peakTime}</div>
          <p className={styles.flowNote}>{metrics.peakDesc}</p>
       </section>
 
-      {/* TRULY LIVE AI INSIGHT TEASER */}
-      <section className={`${styles.insightCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.6s' }}>
+      {/* AI INSIGHT TEASER */}
+      <section className={`${styles.insightCard} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.6s' }}>
          <div className={styles.insightHeader}><span className={styles.aiBadge}>AI Insight</span> <ArrowRight size={16} /></div>
          <p className={styles.insightText}>
             "{userName}, you are making great progress! Try shifting Deep Work to your {metrics.peakTime !== 'Analyzing...' ? metrics.peakTime.split(' - ')[0] : 'optimal'} slot to maximize retention."

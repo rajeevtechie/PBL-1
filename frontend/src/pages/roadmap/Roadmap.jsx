@@ -7,12 +7,10 @@ import {
 import styles from './Roadmap.module.css';
 
 const Roadmap = () => {
-  // --- STATE ---
   const [roadmap, setRoadmap] = useState(null);
   const [careerData, setCareerData] = useState(null); 
-  const [subjectList, setSubjectList] = useState([]); // ✅ NEW: Holds all user subjects
+  const [subjectList, setSubjectList] = useState([]); 
   
-  // ✅ NEW: Manage active context dynamically in state instead of just localStorage
   const [activeId, setActiveId] = useState(localStorage.getItem('activeSyllabusId') || 'latest');
 
   const [loading, setLoading] = useState(true);
@@ -28,7 +26,6 @@ const Roadmap = () => {
     setExpandedUnits(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
-  // --- 1. FETCH SUBJECT LIST ON MOUNT ---
   useEffect(() => {
     const fetchSubjectList = async () => {
         try {
@@ -42,7 +39,6 @@ const Roadmap = () => {
     fetchSubjectList();
   }, []);
 
-  // --- 2. FETCH ROADMAP DATA (Runs whenever activeId changes!) ---
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -59,17 +55,14 @@ const Roadmap = () => {
             ? `http://localhost:5000/api/syllabus/latest` 
             : `http://localhost:5000/api/syllabus/${activeId}`;
 
-        // Fetch Syllabus
         const resSyllabus = await axios.get(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
         setRoadmap(resSyllabus.data);
 
-        // If 'latest' resolved to an actual ID, update our state & localStorage to match
         if (activeId === 'latest' && resSyllabus.data.id) {
             setActiveId(resSyllabus.data.id.toString());
             localStorage.setItem('activeSyllabusId', resSyllabus.data.id.toString());
         }
 
-        // Fetch Career Insights
         try {
             const syllabusIdQuery = resSyllabus.data.id || activeId;
             const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`, {
@@ -80,7 +73,7 @@ const Roadmap = () => {
             if (resCareer.data.targetRole) {
                 setTargetRole(resCareer.data.targetRole);
             } else {
-                setTargetRole(""); // Reset if this subject has no role yet
+                setTargetRole(""); 
             }
         } catch {
             setCareerData(null);
@@ -95,9 +88,8 @@ const Roadmap = () => {
       }
     };
     fetchData();
-  }, [activeId]); // Re-run whenever the user picks a new subject from the dropdown
+  }, [activeId]);
 
-  // --- ACTIONS ---
   const handleAnalyzeGaps = async () => {
     if (!targetRole.trim()) {
         alert("Please enter a target role or objective first!"); return;
@@ -106,7 +98,7 @@ const Roadmap = () => {
     setAnalyzing(true);
     try {
         const token = localStorage.getItem('token');
-        const currentId = roadmap?.id || activeId; // Use resolved ID
+        const currentId = roadmap?.id || activeId; 
         
         const response = await axios.post(`http://localhost:5000/api/syllabus/${currentId}/analyze`, 
             { targetRole: targetRole, isGlobal: isGlobal, syllabusId: currentId },
@@ -168,7 +160,6 @@ const Roadmap = () => {
     }
   };
 
-  // --- PROGRESS MATH ---
   const academicProgress = roadmap?.units?.length 
     ? Math.round((roadmap.units.filter(u => u.is_completed || u.completed || u.is_completed === 1).length / roadmap.units.length) * 100) : 0;
 
@@ -183,7 +174,6 @@ const Roadmap = () => {
   return (
     <div className={styles.roadmapContainer}>
       
-      {/* ✅ NEW: HEADER WITH SUBJECT DROPDOWN */}
       <header className={styles.header}>
         <div className={styles.headerContent} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '20px' }}>
             <div>
@@ -194,7 +184,6 @@ const Roadmap = () => {
                 </p>
             </div>
 
-            {/* SUBJECT SWITCHER */}
             {subjectList.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(30, 41, 59, 0.5)', padding: '8px 12px', borderRadius: '10px', border: '1px solid #334155' }}>
                     <BookOpen size={16} color="#94a3b8" />
@@ -220,7 +209,6 @@ const Roadmap = () => {
 
       <div className={styles.tracksGrid}>
         
-        {/* === LEFT COLUMN: ACADEMIC TRACK === */}
         <section className={styles.trackColumn}>
           <div className={styles.trackHeader} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '15px' }}>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', width: '100%' }}>
@@ -241,6 +229,10 @@ const Roadmap = () => {
           <div className={styles.timeline}>
             {roadmap?.units?.map((unit, index) => {
               const unitDone = unit.is_completed || unit.completed || unit.is_completed === 1;
+              
+              // Helper to check if unit has <= 3 topics
+              const isShortUnit = !unit.topics || unit.topics.length <= 3;
+              
               return (
               <div key={index} className={`${styles.node} ${unitDone ? styles.completed : (index === 0 || (roadmap.units[index-1]?.is_completed || roadmap.units[index-1]?.completed) ? styles.current : styles.locked)}`}>
                 <div className={styles.line}></div>
@@ -251,16 +243,18 @@ const Roadmap = () => {
                   <div className={styles.unitBadge}>Unit {unit.unitNumber}</div>
                   <h3 style={{ textDecoration: unitDone ? 'line-through' : 'none' }}>{unit.title}</h3>
                   <ul className={styles.topicList}>
-                      {unit.topics.slice(0, expandedUnits[index] ? unit.topics.length : 3).map((topic, tIdx) => (
+                      {unit.topics?.slice(0, expandedUnits[index] ? unit.topics.length : 3).map((topic, tIdx) => (
                           <li key={tIdx}><ChevronRight size={14} style={{ minWidth: '14px' }} /> {topic}</li>
                       ))}
-                      {unit.topics.length > 3 && (
+                      {!isShortUnit && (
                           <li className={styles.moreTopics} onClick={() => toggleUnit(index)} style={{ cursor: 'pointer', color: 'var(--primary)', fontWeight: '600', marginTop: '8px' }}>
                             {expandedUnits[index] ? "- Show less topics" : `+ ${unit.topics.length - 3} more topics`}
                           </li>
                       )}
                   </ul>
-                  {expandedUnits[index] && (
+                  
+                  {/* ✅ FIXED: Show checkbox if expanded OR if the unit is naturally short! */}
+                  {(expandedUnits[index] || isShortUnit) && (
                       <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <input type="checkbox" id={`unit-${index}`} checked={unitDone} onChange={() => handleToggleAcademicUnit(index)} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#10b981' }} />
                           <label htmlFor={`unit-${index}`} style={{ cursor: 'pointer', fontSize: '0.85rem', color: unitDone ? '#10b981' : '#cbd5e1', fontWeight: '500' }}>Mark Unit {unit.unitNumber} as Completed</label>
@@ -272,7 +266,6 @@ const Roadmap = () => {
           </div>
         </section>
 
-        {/* === RIGHT COLUMN: CAREER / EXAM TRACK === */}
         <section className={styles.trackColumn}>
           <div className={styles.trackHeader} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '15px' }}>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', width: '100%' }}>
