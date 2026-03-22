@@ -27,5 +27,7 @@ router.patch('/recommendation/:recId/toggle', authMiddleware, syllabusController
 // --- DYNAMIC ROUTES (Containing :id) ---
 router.get('/:id', authMiddleware, syllabusController.getSyllabusById);
 router.post('/:id/analyze', authMiddleware, syllabusController.generateCareerInsights);
+// ✅ NEW: Save Academic Progress
+router.put('/:id/structure', authMiddleware, syllabusController.updateSyllabusStructure);
 
 module.exports = router;

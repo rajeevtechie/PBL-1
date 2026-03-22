@@ -9,256 +9,179 @@ const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 // --- UPLOAD & ANALYZE SYLLABUS ---
 exports.uploadSyllabus = async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ message: "No file uploaded" });
-        }
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
         console.log(`📤 InsightED: Processing file for User ID ${req.user.id}...`);
 
-        const filePart = {
-            inlineData: {
-                data: req.file.buffer.toString("base64"),
-                mimeType: req.file.mimetype,
-            },
-        };
+        const filePart = { inlineData: { data: req.file.buffer.toString("base64"), mimeType: req.file.mimetype } };
 
         const prompt = `
         System: You are the InsightED academic curriculum parser. 
         Task: Analyze this syllabus file and extract the course structure.
-        Output Format: Strictly JSON. No markdown. No intro text.
-        Schema:
-        {
-            "courseTitle": "string",
-            "units": [
-                {
-                    "unitNumber": number,
-                    "title": "string",
-                    "topics": ["string", "string"]
-                }
-            ]
-        }
+        Output Format: Strictly JSON. Schema: {"courseTitle": "string", "units": [{"unitNumber": number, "title": "string", "topics": ["string"]}]}
         `;
 
         const result = await model.generateContent([prompt, filePart]);
-        const response = await result.response;
-        let text = response.text();
-
-        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        let text = (await result.response).text().replace(/```json/g, "").replace(/```/g, "").trim();
         const syllabusJson = JSON.parse(text);
 
-        const userId = req.user.id; 
-
-        // Store as JSON string in DB
         const [resultDb] = await db.execute(
             'INSERT INTO syllabuses (user_id, course_title, structure) VALUES (?, ?, ?)',
-            [userId, syllabusJson.courseTitle || "Untitled Course", JSON.stringify(syllabusJson)]
+            [req.user.id, syllabusJson.courseTitle || "Untitled Course", JSON.stringify(syllabusJson)]
         );
 
-        console.log("✅ Syllabus Saved! Database ID:", resultDb.insertId);
-
-        res.status(201).json({ 
-            message: "Syllabus processed successfully", 
-            syllabusId: resultDb.insertId,
-            data: syllabusJson 
-        });
-
+        res.status(201).json({ message: "Syllabus processed", syllabusId: resultDb.insertId, data: syllabusJson });
     } catch (error) {
         console.error("❌ Error processing syllabus:", error);
         res.status(500).json({ message: "AI Processing Failed", error: error.message });
     }
 };
 
-// --- LIST ALL SUBJECTS FOR USER ---
+// --- LIST ALL SUBJECTS ---
 exports.listAllSyllabuses = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const [rows] = await db.execute(
-            'SELECT id, course_title, created_at FROM syllabuses WHERE user_id = ? ORDER BY created_at DESC',
-            [userId]
-        );
-
+        const [rows] = await db.execute('SELECT id, course_title, created_at FROM syllabuses WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
         res.status(200).json(rows);
     } catch (error) {
-        console.error("❌ Error listing syllabuses:", error);
         res.status(500).json({ message: "Failed to fetch subject list" });
     }
 };
 
-// --- GET SPECIFIC SYLLABUS BY ID ---
+// --- GET SPECIFIC SYLLABUS ---
 exports.getSyllabusById = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const syllabusId = req.params.id;
-
-        const [rows] = await db.execute(
-            'SELECT * FROM syllabuses WHERE id = ? AND user_id = ?',
-            [syllabusId, userId]
-        );
-
-        if (rows.length === 0) {
-            return res.status(404).json({ message: "Subject not found." });
-        }
-
-        let roadmapData = rows[0].structure;
-        if (typeof roadmapData === 'string') {
-            roadmapData = JSON.parse(roadmapData);
-        }
-
+        const [rows] = await db.execute('SELECT * FROM syllabuses WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+        if (rows.length === 0) return res.status(404).json({ message: "Subject not found." });
+        
+        let roadmapData = typeof rows[0].structure === 'string' ? JSON.parse(rows[0].structure) : rows[0].structure;
         res.status(200).json(roadmapData);
     } catch (error) {
-        console.error("❌ Error fetching specific roadmap:", error);
-        res.status(500).json({ message: "Failed to load the selected subject" });
+        res.status(500).json({ message: "Failed to load subject" });
     }
 };
 
-// --- GET LATEST SYLLABUS (Auto-resume last active) ---
+// --- GET LATEST SYLLABUS ---
 exports.getLatestSyllabus = async (req, res) => {
     try {
-        const userId = req.user.id; 
+        const [rows] = await db.execute('SELECT * FROM syllabuses WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [req.user.id]);
+        if (rows.length === 0) return res.status(404).json({ message: "No roadmap found." });
 
-        const [rows] = await db.execute(
-            'SELECT * FROM syllabuses WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
-            [userId]
-        );
-
-        if (rows.length === 0) {
-            return res.status(404).json({ message: "No roadmap found. Please upload a syllabus first." });
-        }
-
-        let roadmapData = rows[0].structure;
-
-        if (typeof roadmapData === 'string') {
-            try {
-                roadmapData = JSON.parse(roadmapData);
-            } catch (e) {
-                console.error("Error parsing JSON from DB:", e);
-                return res.status(500).json({ message: "Data corruption in database" });
-            }
-        }
-
+        let roadmapData = typeof rows[0].structure === 'string' ? JSON.parse(rows[0].structure) : rows[0].structure;
         res.status(200).json(roadmapData);
-        
     } catch (error) {
-        console.error("❌ Error fetching roadmap:", error);
         res.status(500).json({ message: "Failed to load roadmap" });
     }
 };
 
-// --- GET SAVED CAREER INSIGHTS ---
+// --- GET CONTEXTUAL CAREER INSIGHTS ---
 exports.getCareerInsights = async (req, res) => {
     try {
         const userId = req.user.id;
+        let syllabusId = req.query.syllabusId;
 
-        // Fetch the goal
-        const [goals] = await db.execute('SELECT target_role FROM career_goals WHERE user_id = ?', [userId]);
+        // Failsafe: If frontend doesn't send an ID, grab the latest one automatically
+        if (!syllabusId || syllabusId === 'latest' || syllabusId === 'undefined') {
+            const [syl] = await db.execute('SELECT id FROM syllabuses WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [userId]);
+            if (syl.length === 0) return res.status(200).json({ targetRole: null, recommendations: [] });
+            syllabusId = syl[0].id;
+        }
+
+        // 1. Fetch Goal (Check for local subject-specific goal first, fallback to global)
+        const [localGoal] = await db.execute('SELECT target_role FROM career_goals WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
+        const [globalGoal] = await db.execute('SELECT target_role FROM career_goals WHERE user_id = ? AND syllabus_id IS NULL', [userId]);
         
-        // Fetch the recommendations
-        const [recs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ?', [userId]);
+        const activeRole = localGoal.length > 0 ? localGoal[0].target_role : (globalGoal.length > 0 ? globalGoal[0].target_role : null);
 
-        res.status(200).json({
-            targetRole: goals.length > 0 ? goals[0].target_role : null,
-            recommendations: recs
-        });
+        // 2. Fetch specific recommendations for THIS subject only
+        const [recs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
+
+        res.status(200).json({ targetRole: activeRole, recommendations: recs });
     } catch (error) {
-        console.error("❌ Error fetching career insights:", error);
+        console.error("❌ Error fetching insights:", error);
         res.status(500).json({ message: "Failed to load career track" });
     }
 };
 
-// --- GENERATE HOLISTIC CAREER GAP ANALYSIS (AGGREGATED) ---
+// --- GENERATE SMART/CONTEXTUAL CAREER INSIGHTS ---
 exports.generateCareerInsights = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { targetRole } = req.body; 
+        let syllabusId = req.params.id;
+        const { targetRole, isGlobal } = req.body; 
 
-        if (!targetRole) {
-            return res.status(400).json({ message: "Please provide a target career role." });
+        if (!targetRole) return res.status(400).json({ message: "Please provide a target career role." });
+
+        // 1. Resolve 'latest' to actual ID
+        if (syllabusId === 'latest' || syllabusId === 'undefined') {
+            const [rows] = await db.execute('SELECT id FROM syllabuses WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [userId]);
+            if (rows.length === 0) return res.status(404).json({ message: "No syllabus found." });
+            syllabusId = rows[0].id;
         }
 
-        // 1. Fetch ALL academic syllabuses for this user
-        const [rows] = await db.execute(
-            'SELECT course_title, structure FROM syllabuses WHERE user_id = ?',
-            [userId]
-        );
-
-        if (rows.length === 0) {
-            return res.status(404).json({ message: "No syllabuses found. Please upload at least one syllabus first." });
-        }
-
-        // 2. Stitch them all together into a "Knowledge Portfolio"
-        const combinedCurriculum = rows.map(row => {
-            let parsedStructure = row.structure;
-            if (typeof parsedStructure === 'string') {
-                try { parsedStructure = JSON.parse(parsedStructure); } catch(e) { }
-            }
-            return {
-                subjectTitle: row.course_title,
-                content: parsedStructure
-            };
-        });
-
-        // 3. The Prompt: Now evaluating the COMBINED knowledge
-        const prompt = `
-        System: You are an elite tech industry career advisor.
-        Task: Analyze the following COMBINED academic curriculum (which represents everything this student has learned across multiple university subjects). 
-        Compare their total aggregated knowledge against the real-world industry requirements for a "${targetRole}". 
-        Identify 3 to 5 critical industry skills that are completely MISSING from their entire curriculum but are strictly required for this role.
+        // 2. Fetch the specific subject
+        const [rows] = await db.execute('SELECT course_title, structure FROM syllabuses WHERE id = ? AND user_id = ?', [syllabusId, userId]);
+        if (rows.length === 0) return res.status(404).json({ message: "Syllabus not found." });
         
-        Student's Combined Curriculum:
-        ${JSON.stringify(combinedCurriculum)}
+        const courseTitle = rows[0].course_title;
+        const academicStructure = rows[0].structure;
 
-        Output Format: Strictly JSON. No markdown. No intro text.
-        Schema:
-        {
-            "missingSkills": [
-                {
-                    "topic_name": "string (e.g., 'Docker & Containerization')",
-                    "category": "string (e.g., 'DevOps' or 'Backend')",
-                    "importance_level": "Critical" | "High" | "Medium"
-                }
-            ]
+        // 3. THE TRAFFIC COP: Academic Mode vs Industry Mode
+        const isAcademicMode = /academic|exam|university|pass|score/i.test(targetRole);
+        let prompt = "";
+
+        if (isAcademicMode) {
+            console.log(`🧠 InsightED: Academic Mode triggered for ${courseTitle}...`);
+            prompt = `
+            System: You are an expert university professor and exam predictor.
+            Task: Analyze the following syllabus for "${courseTitle}". 
+            Predict the top 3 to 5 highest-weightage exam topics that students MUST focus on to pass their finals.
+            
+            Syllabus: ${typeof academicStructure === 'string' ? academicStructure : JSON.stringify(academicStructure)}
+
+            Output Format: Strictly JSON. Schema:
+            {"missingSkills": [{"topic_name": "string", "category": "Exam Prediction", "importance_level": "Critical" | "High" | "Medium"}]}
+            `;
+        } else {
+            console.log(`🧠 InsightED: Industry Mode triggered for ${courseTitle} -> ${targetRole}...`);
+            prompt = `
+            System: You are an elite tech industry career advisor.
+            Task: Analyze this specific academic syllabus ("${courseTitle}"). The user wants to be a "${targetRole}". 
+            Identify 3 to 5 critical industry skills strictly related to this subject that the university is NOT teaching them.
+            
+            Syllabus: ${typeof academicStructure === 'string' ? academicStructure : JSON.stringify(academicStructure)}
+
+            Output Format: Strictly JSON. Schema:
+            {"missingSkills": [{"topic_name": "string (e.g., 'Learn AWS RDS instead of local MySQL')", "category": "Industry Gap", "importance_level": "Critical" | "High"}]}
+            `;
         }
-        `;
 
-        // 4. Ask Gemini
-        console.log(`🧠 InsightED: Aggregating ${rows.length} subjects to find gaps for ${targetRole}...`);
         const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let text = response.text();
-
-        // 5. Clean & Parse JSON
-        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        let text = (await result.response).text().replace(/```json/g, "").replace(/```/g, "").trim();
         const careerJson = JSON.parse(text);
 
-        // 6. Save Target Role to \`career_goals\` table
-        await db.execute(
-            `INSERT INTO career_goals (user_id, target_role) 
-             VALUES (?, ?) 
-             ON DUPLICATE KEY UPDATE target_role = ?`,
-            [userId, targetRole, targetRole]
-        );
+        // 4. Save the Goal
+        if (isGlobal !== false) {
+            await db.execute('DELETE FROM career_goals WHERE user_id = ? AND syllabus_id IS NULL', [userId]);
+            await db.execute('INSERT INTO career_goals (user_id, syllabus_id, target_role) VALUES (?, NULL, ?)', [userId, targetRole]);
+        } else {
+            await db.execute('DELETE FROM career_goals WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
+            await db.execute('INSERT INTO career_goals (user_id, syllabus_id, target_role) VALUES (?, ?, ?)', [userId, syllabusId, targetRole]);
+        }
 
-        // 7. Save Skills to \`roadmap_recommendations\` table
-        await db.execute('DELETE FROM roadmap_recommendations WHERE user_id = ?', [userId]);
-
+        // 5. Save the targeted Gaps (Linked ONLY to this syllabus)
+        await db.execute('DELETE FROM roadmap_recommendations WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
         for (const skill of careerJson.missingSkills) {
             await db.execute(
-                `INSERT INTO roadmap_recommendations (user_id, topic_name, category, importance_level) 
-                 VALUES (?, ?, ?, ?)`,
-                [userId, skill.topic_name, skill.category, skill.importance_level]
+                'INSERT INTO roadmap_recommendations (user_id, syllabus_id, topic_name, category, importance_level) VALUES (?, ?, ?, ?, ?)',
+                [userId, syllabusId, skill.topic_name, skill.category, skill.importance_level]
             );
         }
 
-        // 8. Fetch the newly inserted records to get their Database IDs!
-        const [newRecs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ?', [userId]);
-
-        res.status(200).json({ 
-            message: "Holistic career insights generated successfully",
-            recommendations: newRecs // Send back the actual database rows, not just the AI text
-        });
+        const [newRecs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
+        res.status(200).json({ message: "Contextual insights generated!", recommendations: newRecs });
 
     } catch (error) {
-        console.error("❌ Error generating holistic career insights:", error);
+        console.error("❌ Error generating insights:", error);
         res.status(500).json({ message: "AI Analysis Failed", error: error.message });
     }
 };
@@ -266,18 +189,38 @@ exports.generateCareerInsights = async (req, res) => {
 // --- TOGGLE RECOMMENDATION COMPLETION ---
 exports.toggleRecommendation = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const recId = req.params.recId;
-        const { isCompleted } = req.body; 
-
         await db.execute(
             'UPDATE roadmap_recommendations SET is_completed = ? WHERE id = ? AND user_id = ?',
-            [isCompleted ? 1 : 0, recId, userId]
+            [req.body.isCompleted ? 1 : 0, req.params.recId, req.user.id]
+        );
+        res.status(200).json({ message: "Status updated" });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to update status" });
+    }
+};
+// --- UPDATE ACADEMIC SYLLABUS PROGRESS ---
+exports.updateSyllabusStructure = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        let syllabusId = req.params.id;
+        const { structure } = req.body;
+
+        // Resolve 'latest' to actual ID
+        if (syllabusId === 'latest' || syllabusId === 'undefined') {
+            const [rows] = await db.execute('SELECT id FROM syllabuses WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [userId]);
+            if (rows.length === 0) return res.status(404).json({ message: "No syllabus found." });
+            syllabusId = rows[0].id;
+        }
+
+        // Overwrite the JSON structure with the updated completion statuses
+        await db.execute(
+            'UPDATE syllabuses SET structure = ? WHERE id = ? AND user_id = ?',
+            [JSON.stringify(structure), syllabusId, userId]
         );
 
-        res.status(200).json({ message: "Status updated successfully" });
+        res.status(200).json({ message: "Academic progress saved successfully" });
     } catch (error) {
-        console.error("❌ Error toggling recommendation:", error);
-        res.status(500).json({ message: "Failed to update status" });
+        console.error("❌ Error updating syllabus progress:", error);
+        res.status(500).json({ message: "Failed to save progress" });
     }
 };

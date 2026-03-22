@@ -1,4 +1,3 @@
--- database.sql
 CREATE DATABASE IF NOT EXISTS insighted;
 USE insighted;
 
@@ -10,37 +9,41 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-select * from users;
-
 CREATE TABLE IF NOT EXISTS syllabuses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     course_title VARCHAR(255) NOT NULL,
     structure JSON NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
-USE insighted;
 
+-- ✅ OUR VERSION: Kept syllabus_id (NULL) and removed UNIQUE from user_id 
+-- so users can have both Global and Subject-Specific goals!
 CREATE TABLE IF NOT EXISTS career_goals (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL UNIQUE, 
+    user_id INT NOT NULL, 
+    syllabus_id INT NULL, 
     target_role VARCHAR(100) NOT NULL, 
     target_company_tier VARCHAR(50), 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (syllabus_id) REFERENCES syllabuses(id) ON DELETE CASCADE
 );
 
+-- ✅ OUR VERSION: Kept syllabus_id (NOT NULL) so gaps belong to a specific subject!
 CREATE TABLE IF NOT EXISTS roadmap_recommendations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
+    syllabus_id INT NOT NULL,
     topic_name VARCHAR(100) NOT NULL, 
     category VARCHAR(50), 
     importance_level ENUM('Critical', 'High', 'Medium') DEFAULT 'High',
     is_completed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (syllabus_id) REFERENCES syllabuses(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS quizzes (
@@ -94,6 +97,7 @@ CREATE TABLE IF NOT EXISTS weekly_insights (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- ✅ NEW FEATURE: Added your new Library Items table
 CREATE TABLE IF NOT EXISTS library_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -106,8 +110,8 @@ CREATE TABLE IF NOT EXISTS library_items (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- ✅ INDEXES: Combined both our performance indexes and your new library index
 CREATE INDEX idx_library_user_category ON library_items(user_id, category);
-
 CREATE INDEX idx_tasks_user_status ON tasks(user_id, status);
 CREATE INDEX idx_tasks_deadline ON tasks(deadline);
 CREATE INDEX idx_sessions_user_time ON study_sessions(user_id, start_time);
