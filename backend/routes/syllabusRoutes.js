@@ -1,33 +1,30 @@
 const express = require('express');
-const router = express.Router();
 const multer = require('multer');
-const syllabusController = require('../controllers/syllabusController');
 const authMiddleware = require('../middleware/authMiddleware');
+const syllabusController = require('../controllers/syllabusController');
 
-// Configure Multer (Store files in memory temporarily)
+const router = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-// --- UPLOAD ROUTE ---
-router.post(
-    '/upload', 
-    authMiddleware,             
-    upload.single('file'),      
-    syllabusController.uploadSyllabus
-);
-
-// --- STATIC GET ROUTES (Must go BEFORE /:id) ---
-router.get('/latest', authMiddleware, syllabusController.getLatestSyllabus);
-router.get('/list', authMiddleware, syllabusController.listAllSyllabuses);
-router.get('/career-insights', authMiddleware, syllabusController.getCareerInsights);
-router.get('/progress/aggregate', authMiddleware, syllabusController.getAggregateProgress);
-// ✅ NEW: Toggle Checkbox Status
+// ==============================================================
+// 1. CAREER TRACK & AI INSIGHT ROUTES (Must be FIRST to avoid :id collision)
+// ==============================================================
+router.get('/career/insights', authMiddleware, syllabusController.getCareerInsights);
+router.post('/career/generate', authMiddleware, syllabusController.generateCareerInsights);
 router.patch('/recommendation/:recId/toggle', authMiddleware, syllabusController.toggleRecommendation);
 
-// --- DYNAMIC ROUTES (Containing :id) ---
+// ==============================================================
+// 2. ACADEMIC SYLLABUS ROUTES
+// ==============================================================
+router.post('/upload', authMiddleware, upload.single('file'), syllabusController.uploadSyllabus);
+router.post('/confirm-upload', authMiddleware, syllabusController.confirmUpload);
+router.get('/list', authMiddleware, syllabusController.listAllSyllabuses);
+router.get('/latest', authMiddleware, syllabusController.getLatestSyllabus);
+router.get('/progress/aggregate', authMiddleware, syllabusController.getAggregateProgress);
+
+// Dynamic ID routes MUST be at the very bottom
+router.post('/:id/unit/toggle', authMiddleware, syllabusController.toggleUnitCompletion);
 router.get('/:id', authMiddleware, syllabusController.getSyllabusById);
-router.post('/:id/analyze', authMiddleware, syllabusController.generateCareerInsights);
-// ✅ NEW: Save Academic Progress
-router.put('/:id/structure', authMiddleware, syllabusController.updateSyllabusStructure);
 
 module.exports = router;

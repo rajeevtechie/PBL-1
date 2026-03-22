@@ -1,9 +1,10 @@
 .authContainer {
   display: flex;
-  min-height: 100vh; /* ✅ FIX: allow content to grow */
+  min-height: 100vh;
   width: 100vw;
-  background-color: var(--bg-app);
-  overflow-y: auto; /* ✅ FIX: enable scroll */
+  background-color: var(--bg-app, #0f172a); 
+  overflow-y: auto;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 /* LEFT SIDE: Brand */
@@ -28,7 +29,7 @@
 .logoBadge {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  background: linear-gradient(135deg, var(--primary, #6366f1), var(--secondary, #8b5cf6));
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -40,12 +41,8 @@
 }
 
 @keyframes glow {
-  from {
-    box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
-  }
-  to {
-    box-shadow: 0 10px 40px rgba(99, 102, 241, 0.6);
-  }
+  from { box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3); }
+  to { box-shadow: 0 10px 40px rgba(99, 102, 241, 0.6); }
 }
 
 .brandSection h1 {
@@ -78,7 +75,7 @@
 .dot {
   width: 8px;
   height: 8px;
-  background-color: var(--success);
+  background-color: var(--success, #10b981);
   border-radius: 50%;
 }
 
@@ -109,7 +106,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #0f172a;
+  background-color: var(--bg-app, #0f172a);
   padding: 2rem;
   padding-top: 3rem;
 }
@@ -117,8 +114,14 @@
 /* FORM */
 .formWrapper {
   width: 100%;
-  max-width: 460px;
+  max-width: 420px;
   padding-top: 20px;
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .header {
@@ -127,18 +130,23 @@
 
 .header h2 {
   font-size: 2rem;
-  color: var(--text-main);
+  color: var(--text-main, #f8fafc);
   margin: 0 0 0.5rem 0;
+  font-weight: 700;
 }
 
 .header p {
-  color: var(--text-muted);
+  color: var(--text-muted, #94a3b8);
+  font-size: 1rem;
+  margin: 0;
 }
 
 /* INPUTS */
 .inputGroup {
   position: relative;
-  margin-bottom: 1.6rem;
+  margin-bottom: 1.2rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .inputIcon {
@@ -146,27 +154,32 @@
   left: 16px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-muted);
+  color: #64748b;
+  pointer-events: none;
 }
 
 .inputGroup input {
   width: 100%;
-  background-color: var(--bg-panel);
-  border: 1px solid var(--border-color);
+  background-color: var(--bg-panel, #1e293b);
+  border: 1px solid var(--border-color, #334155);
   padding: 14px 16px 14px 48px;
   border-radius: 12px;
-  color: var(--text-main);
+  color: var(--text-main, #f8fafc);
   font-size: 1rem;
   outline: none;
+  box-sizing: border-box; 
   transition: all 0.2s ease;
 }
 
 .inputGroup input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  border-color: var(--primary, #6366f1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
-/* PASSWORD TOGGLE */
+.inputGroup input::placeholder {
+  color: #64748b;
+}
+
 .passwordToggle {
   position: absolute;
   right: 16px;
@@ -174,102 +187,160 @@
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: var(--text-muted);
+  color: #64748b;
   cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
 }
 
 .passwordToggle:hover {
-  color: var(--primary);
+  color: var(--text-main, #cbd5e1);
 }
 
-/* TERMS */
+/* --- PERFECTLY ALIGNED CHECKBOX --- */
+.options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  margin-top: 0.5rem;
+}
+
 .terms {
-  margin-bottom: 1.8rem;
+  margin-bottom: 1.5rem;
+  margin-top: 0.5rem;
 }
 
-.termsLabel {
+.checkbox {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
-  color: var(--text-muted);
+  gap: 10px; /* Space between box and text */
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.95rem;
   cursor: pointer;
 }
 
-.termsLabel input {
+.checkbox input {
   width: 16px;
   height: 16px;
-  accent-color: var(--primary);
+  accent-color: var(--primary, #6366f1);
+  cursor: pointer;
+  margin: 0; /* Ensures box doesn't float up or down */
+  position: relative;
+  top: -1px; /* Optical adjustment for perfect centering */
+}
+
+.checkbox span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.forgotLink {
+  color: var(--text-main, #f8fafc);
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.forgotLink:hover {
+  color: var(--primary, #818cf8);
 }
 
 .link {
-  color: var(--primary);
+  color: var(--primary, #818cf8);
   font-weight: 500;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.link:hover {
+  color: #a5b4fc;
 }
 
 /* ERROR */
 .errorBox {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
-  padding: 10px;
+  padding: 12px;
   border-radius: 8px;
   margin-bottom: 20px;
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 0.9rem;
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 /* BUTTON */
 .submitBtn {
   width: 100%;
-  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  background: var(--primary, #6366f1);
   color: white;
   padding: 14px;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
+  border: none;
+  cursor: pointer;
   transition: all 0.2s ease;
-  margin-top: 10px;
 }
 
-.submitBtn:hover {
-  opacity: 0.9;
+.submitBtn:hover:not(:disabled) {
+  background: var(--primary-hover, #4f46e5);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.25);
+  transform: translateY(-2px);
 }
 
-.submitBtn:active {
-  transform: scale(0.98);
+.submitBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* LOADER ANIMATION */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
 }
 
 /* FOOTER */
 .footerText {
   text-align: center;
-  margin-top: 1.8rem;
-  color: var(--text-muted);
+  margin-top: 2rem;
+  color: var(--text-muted, #94a3b8);
   font-size: 0.95rem;
 }
 
 .footerText a {
-  color: var(--primary);
+  color: var(--primary, #818cf8);
   font-weight: 600;
+  text-decoration: none;
   margin-left: 4px;
 }
 
-/* MOBILE */
+.footerText a:hover {
+  color: #a5b4fc;
+}
+
+/* --- THE FIX: MOBILE MEDIA QUERY --- */
 @media (max-width: 900px) {
   .brandSection {
     display: none;
   }
-
   .formSection {
-    padding: 1.5rem;
+    padding: 2rem; /* Give breathing room */
   }
-
   .formWrapper {
-    max-width: 100%;
+    max-width: 420px; /* Forces form to stay centered and normal-sized */
+    margin: 0 auto; 
   }
 }
