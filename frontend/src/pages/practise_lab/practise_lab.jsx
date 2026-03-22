@@ -18,6 +18,12 @@ const Assessment = () => {
   const [difficulty, setDifficulty] = useState('Medium');
   const [questionCount, setQuestionCount] = useState(15);
   const [timerEnabled, setTimerEnabled] = useState(true);
+  const [isSavingFile, setIsSavingFile] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [isFileModalOpen, setIsFileModalOpen] = useState(false);
+  const [fileTitle, setFileTitle] = useState('');
+  const [fileTitleError, setFileTitleError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState('');
 
   const modes = useMemo(() => (
     ['Quiz (MCQ)', 'Short Answer', 'Long Answer', 'Case Study', 'Mock Test', 'AI Ask']
@@ -95,6 +101,58 @@ const Assessment = () => {
     }
   };
 
+  const handleSaveFile = async (titleValue) => {
+    if (!uploadedFile) {
+      return;
+    }
+
+    setIsSavingFile(true);
+    setSaveError('');
+    setSaveSuccess('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', uploadedFile);
+      formData.append('title', titleValue.trim());
+
+      const response = await fetch('http://localhost:5000/api/library/save-file', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to save file.');
+      }
+
+      setIsFileModalOpen(false);
+      setFileTitle('');
+      setFileTitleError('');
+      setSaveSuccess('Saved to library.');
+    } catch (error) {
+      setSaveError(error.message);
+    } finally {
+      setIsSavingFile(false);
+    }
+  };
+
+  const openFileModal = () => {
+    setFileTitle('');
+    setFileTitleError('');
+    setIsFileModalOpen(true);
+  };
+
+  const submitFileTitle = () => {
+    if (!fileTitle.trim()) {
+      setFileTitleError('Title is required.');
+      return;
+    }
+    handleSaveFile(fileTitle);
+  };
+
   const hasInput = Boolean(uploadedFile) || Boolean(textInput.trim());
   const canExtract = hasInput && !isExtracting;
   const modeStep = 2;
@@ -140,6 +198,16 @@ const Assessment = () => {
             <div className={styles.fileMeta}>
               {uploadedFile ? uploadedFile.name : 'No file selected'}
             </div>
+            {uploadedFile && (
+              <button
+                className={styles.secondaryAction}
+                onClick={openFileModal}
+                disabled={isSavingFile}
+                style={{ marginTop: '12px' }}
+              >
+                {isSavingFile ? 'Saving...' : 'Save to Library'}
+              </button>
+            )}
           </div>
 
           <div className={styles.textPanel}>
@@ -161,7 +229,49 @@ const Assessment = () => {
         {extractError && (
           <div className={styles.extractError}>{extractError}</div>
         )}
+        {saveError && (
+          <div className={styles.extractError}>{saveError}</div>
+        )}
+        {saveSuccess && (
+          <div className={styles.successMessage}>{saveSuccess}</div>
+        )}
       </section>
+
+      {isFileModalOpen && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalCard}>
+            <h3 className={styles.modalTitle}>Save to Library</h3>
+            <p className={styles.modalText}>Enter a name for this file.</p>
+            <input
+              className={styles.modalInput}
+              value={fileTitle}
+              onChange={(event) => {
+                setFileTitle(event.target.value);
+                setFileTitleError('');
+              }}
+              placeholder="e.g., Semester 4 Notes"
+            />
+            {fileTitleError && (
+              <div className={styles.modalError}>{fileTitleError}</div>
+            )}
+            <div className={styles.modalActions}>
+              <button
+                className={styles.secondaryAction}
+                onClick={() => setIsFileModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.finalAction}
+                onClick={submitFileTitle}
+                disabled={isSavingFile}
+              >
+                {isSavingFile ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className={styles.splitGrid}>
         <section className={styles.sectionCard}>

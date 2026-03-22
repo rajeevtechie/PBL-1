@@ -7,6 +7,7 @@ import {
   BarChart2, 
   CheckSquare, 
   Zap, 
+  Library,
   Settings, 
   LogOut 
 } from 'lucide-react';
@@ -77,6 +78,14 @@ const Sidebar = () => {
         >
           <CheckSquare size={20} />
           <span>Practice Lab</span>
+        </NavLink>
+
+        <NavLink 
+          to="/library" 
+          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
+        >
+          <Library size={20} />
+          <span>Library</span>
         </NavLink>
 
         <NavLink 

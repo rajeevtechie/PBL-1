@@ -8,6 +8,8 @@ const path = require('path');
 const authRoutes = require('./routes/authRoutes');
 const syllabusRoutes = require('./routes/syllabusRoutes'); 
 const practiceRoutes = require('./routes/practiceRoutes');
+const practiceLabRoutes = require('./routes/practiceLabRoutes');
+const libraryRoutes = require('./routes/libraryRoutes');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
@@ -22,6 +24,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/auth', authRoutes);       // Login & Register
 app.use('/api/syllabus', syllabusRoutes); // AI & Uploads
 app.use('/api/practice', practiceRoutes); // Practice Lab
+app.use('/api/practice', practiceLabRoutes); // Practice Lab topic extraction
+app.use('/api/library', libraryRoutes); // Library
 const focusRoutes = require('./routes/focusRoutes');
 app.use('/api/focus', focusRoutes);
 

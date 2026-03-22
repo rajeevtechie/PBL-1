@@ -46,7 +46,7 @@ const PractiseTopics = () => {
       return;
     }
 
-    navigate('/assessment');
+    navigate('/practice-quiz');
   };
 
   const handleBack = () => {
