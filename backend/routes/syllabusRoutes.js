@@ -20,7 +20,7 @@ router.post(
 router.get('/latest', authMiddleware, syllabusController.getLatestSyllabus);
 router.get('/list', authMiddleware, syllabusController.listAllSyllabuses);
 router.get('/career-insights', authMiddleware, syllabusController.getCareerInsights);
-
+router.get('/progress/aggregate', authMiddleware, syllabusController.getAggregateProgress);
 // ✅ NEW: Toggle Checkbox Status
 router.patch('/recommendation/:recId/toggle', authMiddleware, syllabusController.toggleRecommendation);
 

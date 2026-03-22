@@ -118,8 +118,8 @@ exports.generateCareerInsights = async (req, res) => {
         
         const courseTitle = rows[0].course_title;
         const academicStructure = rows[0].structure;
-
-        const isAcademicMode = /academic|exam|university|pass|score/i.test(targetRole);
+        
+        const isAcademicMode = /academic|exam|examination|university|pass|score|college|grade/i.test(targetRole);
         let prompt = "";
 
         if (isAcademicMode) {
@@ -198,5 +198,37 @@ exports.updateSyllabusStructure = async (req, res) => {
     } catch (error) {
         console.error("❌ Error updating syllabus progress:", error);
         res.status(500).json({ message: "Failed to save progress" });
+    }
+};
+// --- GET AGGREGATE PROGRESS (For Dashboard Averages) ---
+exports.getAggregateProgress = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // 1. Calculate Academic Average (All Subjects)
+        const [syllabuses] = await db.execute('SELECT structure FROM syllabuses WHERE user_id = ?', [userId]);
+        let totalUnits = 0;
+        let completedUnits = 0;
+
+        syllabuses.forEach(row => {
+            const structure = typeof row.structure === 'string' ? JSON.parse(row.structure) : row.structure;
+            if (structure && structure.units) {
+                totalUnits += structure.units.length;
+                completedUnits += structure.units.filter(u => u.is_completed).length;
+            }
+        });
+        const academicAvg = totalUnits === 0 ? 0 : Math.round((completedUnits / totalUnits) * 100);
+
+        // 2. Calculate Career Average (All Recommendations)
+        const [recs] = await db.execute('SELECT is_completed FROM roadmap_recommendations WHERE user_id = ?', [userId]);
+        let totalRecs = recs.length;
+        let completedRecs = recs.filter(r => r.is_completed).length;
+        
+        const careerAvg = totalRecs === 0 ? 0 : Math.round((completedRecs / totalRecs) * 100);
+
+        res.status(200).json({ academicProgress: academicAvg, careerProgress: careerAvg });
+    } catch (error) {
+        console.error("❌ Error calculating aggregate progress:", error);
+        res.status(500).json({ message: "Failed to calculate aggregate progress" });
     }
 };

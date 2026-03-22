@@ -86,7 +86,8 @@ const Roadmap = () => {
         });
         setIsEditingGoal(false);
 
-    } catch  {
+    } catch (err) {
+        console.error("Analysis Error:", err);
         alert("Failed to analyze gaps.");
     } finally {
         setAnalyzing(false);
@@ -149,7 +150,8 @@ const Roadmap = () => {
   if (loading) return <div className={styles.centerMsg}><Loader2 className={styles.spinner} size={48}/></div>;
   if (error) return <div className={styles.centerMsg}><AlertTriangle size={48}/> <p>{error}</p></div>;
 
-  const isAcademicMode = /academic|exam|university|pass|score/i.test(careerData?.targetRole || "");
+  // ✅ UPDATED REGEX: Now safely catches exam, examination, academics, etc.
+  const isAcademicMode = /academic|exam|examination|university|pass|score|college|grade/i.test(careerData?.targetRole || "");
 
   return (
     <div className={styles.roadmapContainer}>
@@ -209,7 +211,7 @@ const Roadmap = () => {
                       )}
                   </ul>
 
-                  {/* ✅ THE NEW CHECKBOX AT THE BOTTOM OF EXPANDED UNIT */}
+                  {/* CHECKBOX AT THE BOTTOM OF EXPANDED UNIT */}
                   {expandedUnits[index] && (
                       <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <input 
@@ -293,11 +295,12 @@ const Roadmap = () => {
                       <div key={rec.id} className={styles.node}>
                         <div className={styles.line}></div>
                         
+                        {/* MARKER (Still clickable for convenience) */}
                         <div className={styles.marker} onClick={() => handleToggleComplete(rec.id, rec.is_completed)} style={{ cursor: 'pointer', color: rec.is_completed ? '#10b981' : (isAcademicMode ? '#8b5cf6' : 'var(--secondary)'), backgroundColor: rec.is_completed ? 'rgba(16, 185, 129, 0.1)' : (isAcademicMode ? 'rgba(139, 92, 246, 0.1)' : 'rgba(236, 72, 153, 0.1)'), transition: 'all 0.3s ease', border: rec.is_completed ? 'none' : '2px solid transparent' }} >
                             {rec.is_completed ? <CheckCircle size={18} /> : (isAcademicMode ? <GraduationCap size={16} /> : <Circle size={16} />)}
                         </div>
 
-                        <div className={styles.content} style={{ opacity: rec.is_completed ? 0.4 : 1, transition: 'opacity 0.3s ease' }}>
+                        <div className={styles.content} style={{ opacity: rec.is_completed ? 0.6 : 1, transition: 'opacity 0.3s ease' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                               <span style={{ fontSize: '0.8rem', color: isAcademicMode ? '#8b5cf6' : 'var(--secondary)', textTransform: 'uppercase', fontWeight: 'bold' }}>{rec.category}</span>
                               <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: rec.importance_level === 'Critical' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)', color: rec.importance_level === 'Critical' ? '#ef4444' : '#f59e0b' }}>{rec.importance_level}</span>
@@ -306,6 +309,20 @@ const Roadmap = () => {
                           <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '8px' }}>
                               {rec.is_completed ? "Completed! Great job." : (isAcademicMode ? "Highly likely to appear on your exam." : `Industry requirement for ${careerData.targetRole}.`)}
                           </p>
+
+                          {/* ✅ EXPLICIT CHECKBOX AT THE BOTTOM OF CAREER CARD */}
+                          <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <input 
+                                  type="checkbox" 
+                                  id={`rec-${rec.id}`}
+                                  checked={rec.is_completed ? true : false}
+                                  onChange={() => handleToggleComplete(rec.id, rec.is_completed)}
+                                  style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: isAcademicMode ? '#8b5cf6' : '#10b981' }}
+                              />
+                              <label htmlFor={`rec-${rec.id}`} style={{ cursor: 'pointer', fontSize: '0.85rem', color: rec.is_completed ? (isAcademicMode ? '#8b5cf6' : '#10b981') : '#cbd5e1', fontWeight: '500' }}>
+                                  Mark as Completed
+                              </label>
+                          </div>
                         </div>
                       </div>
                   ))
