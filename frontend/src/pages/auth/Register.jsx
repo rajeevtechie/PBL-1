@@ -7,7 +7,8 @@ import {
   Lock, 
   ArrowRight, 
   AlertCircle,
-  GraduationCap
+  GraduationCap,
+  Loader2
 } from 'lucide-react';
 import styles from './Auth.module.css'; 
 
@@ -164,9 +165,9 @@ const Register = () => {
               />
             </div>
 
-            {/* UPDATED TERMS & CONDITIONS LINK */}
+            {/* PERFECTLY ALIGNED TERMS ROW */}
             <div className={styles.terms}>
-              <label className={styles.termsLabel} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label className={styles.checkbox}>
                 <input 
                   type="checkbox"
                   checked={agree}
@@ -174,25 +175,24 @@ const Register = () => {
                 />
                 <span>
                   I agree to the{' '}
-                  <Link 
-                    to="/terms" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className={styles.link}
-                  >
+                  <Link to="/terms" target="_blank" rel="noopener noreferrer" className={styles.link}>
                     Terms & Conditions
                   </Link>
                 </span>
               </label>
             </div>
 
+            {/* DYNAMIC LOADING BUTTON */}
             <button 
               type="submit" 
               className={styles.submitBtn} 
               disabled={loading || !agree}
             >
-              {loading ? "Creating Account..." : "Create Account"} 
-              <ArrowRight size={20} />
+              {loading ? (
+                <Loader2 className={styles.spin} size={20} />
+              ) : (
+                <>Create Account <ArrowRight size={20} /></>
+              )}
             </button>
 
           </form>
