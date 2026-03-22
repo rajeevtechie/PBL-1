@@ -1,27 +1,19 @@
-// frontend/src/pages/practise_lab/practise_quiz.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Timer, Square, CheckCircle, Clock } from 'lucide-react'; 
+import { Square, CheckCircle, Clock, Save, RefreshCw } from 'lucide-react'; 
 import axios from 'axios';
 import styles from './practise_lab.module.css';
 
 const RESULTS_KEY = 'practiceQuizResults';
 const SELECTED_KEY = 'practiceSelectedTopics';
 const SETTINGS_KEY = 'practiceSettings';
-const AI_QUERY_KEY = 'practiceAiQuery';
 
 const normalizeStoredResults = (stored, currentMode) => {
-  if (Array.isArray(stored)) {
-    return currentMode ? [] : stored;
-  }
-
+  if (Array.isArray(stored)) return currentMode ? [] : stored;
   if (stored && Array.isArray(stored.items)) {
-    if (currentMode && stored.mode && stored.mode !== currentMode) {
-      return [];
-    }
+    if (currentMode && stored.mode && stored.mode !== currentMode) return [];
     return stored.items;
   }
-
   return [];
 };
 
@@ -30,7 +22,8 @@ const PractiseQuiz = () => {
   const [items, setItems] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
-  const [aiQuery, setAiQuery] = useState('');
+  
+  // --- SAVE STATE ---
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -38,40 +31,41 @@ const PractiseQuiz = () => {
   const [contentTitleError, setContentTitleError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
 
-  // --- EMBEDDED FOCUS TIMER STATE ---
+  // --- FOCUS TIMER & EVALUATION STATE ---
   const [targetMinutes, setTargetMinutes] = useState(25);
   const [remainingSeconds, setRemainingSeconds] = useState(25 * 60);
   const [isFocusActive, setIsFocusActive] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [studiedSeconds, setStudiedSeconds] = useState(0);
+  
+  // --- INTERACTIVE QUIZ STATE ---
+  const [userAnswers, setUserAnswers] = useState({});
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState(null);
 
   const modeMap = {
     'Quiz (MCQ)': 'quiz',
     'Short Answer': 'short',
     'Long Answer': 'long',
     'Case Study': 'case',
-    'Mock Test': 'mock',
-    'AI Ask': 'ai'
+    'Mock Test': 'mock'
+    // Removed AI Ask
   };
 
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem(RESULTS_KEY) || '[]');
     const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     setItems(normalizeStoredResults(stored, settings.mode));
-    const storedQuery = localStorage.getItem(AI_QUERY_KEY) || '';
-    setAiQuery(storedQuery);
   }, []);
 
-  // AUTO-START TIMER
   useEffect(() => {
-    if (items.length > 0 && !isFocusActive && studiedSeconds === 0 && !sessionStartTime) {
+    if (items.length > 0 && !isFocusActive && studiedSeconds === 0 && !sessionStartTime && !isSubmitted) {
       setIsFocusActive(true);
       setSessionStartTime(new Date().toISOString());
       localStorage.setItem('quizFocusEndTime', (Date.now() + targetMinutes * 60000).toString());
     }
-  }, [items, isFocusActive, studiedSeconds, sessionStartTime, targetMinutes]);
+  }, [items, isFocusActive, studiedSeconds, sessionStartTime, targetMinutes, isSubmitted]);
 
-  // Keep Timer Ticking
   useEffect(() => {
     let interval;
     if (isFocusActive) {
@@ -81,7 +75,7 @@ const PractiseQuiz = () => {
         if (diff <= 0) {
           clearInterval(interval);
           setRemainingSeconds(0);
-          handleStopFocus(targetMinutes * 60);
+          handleSubmitQuiz(targetMinutes * 60); 
         } else {
           setRemainingSeconds(diff);
         }
@@ -90,26 +84,19 @@ const PractiseQuiz = () => {
     return () => clearInterval(interval);
   }, [isFocusActive, targetMinutes]);
 
-  // --- DYNAMIC TIME EDITING LOGIC ---
   const handleTimeChange = (e) => {
     let val = e.target.value;
-    
-    // Allow empty state while typing
     if (val === '') {
       setTargetMinutes('');
       return;
     }
-
     const mins = Number(val);
-    if (mins < 1 || isNaN(mins)) return; // Prevent negative or invalid numbers
-    
+    if (mins < 1 || isNaN(mins)) return; 
     setTargetMinutes(mins);
 
-    // If timer is already running, dynamically push the expected end time further out
     if (isFocusActive && sessionStartTime) {
       const newEndTime = new Date(sessionStartTime).getTime() + (mins * 60000);
       localStorage.setItem('quizFocusEndTime', newEndTime.toString());
-      
       const diff = Math.round((newEndTime - Date.now()) / 1000);
       setRemainingSeconds(diff > 0 ? diff : 0);
     } else {
@@ -118,7 +105,6 @@ const PractiseQuiz = () => {
   };
 
   const handleTimeBlur = () => {
-    // Failsafe: if they click away and left it empty, reset to 25
     if (!targetMinutes || targetMinutes < 1) {
       setTargetMinutes(25);
       if (isFocusActive && sessionStartTime) {
@@ -130,84 +116,88 @@ const PractiseQuiz = () => {
     }
   };
 
-  const handleStopFocus = async (secondsOverride) => {
+  const handleAnswerChange = (index, value) => {
+    setUserAnswers(prev => ({
+      ...prev,
+      [index]: value
+    }));
+  };
+
+  const handleSubmitQuiz = async (secondsOverride) => {
     setIsFocusActive(false);
+    setIsSubmitted(true);
     
-    // Fallback safely if targetMinutes is empty string
     const safeTargetMins = Number(targetMinutes) || 25;
     const actualSeconds = secondsOverride !== undefined ? secondsOverride : (safeTargetMins * 60) - remainingSeconds;
     
     setStudiedSeconds(actualSeconds);
     localStorage.removeItem('quizFocusEndTime');
 
+    let correctCount = 0;
+    let gradableCount = 0;
+
+    items.forEach((item, index) => {
+      const isMCQ = Array.isArray(item.options) && item.options.length > 0;
+      if (isMCQ && item.answer) {
+        gradableCount++;
+        const userAns = userAnswers[index] || '';
+        const userFirstChar = userAns.trim().charAt(0).toUpperCase();
+        const actualFirstChar = item.answer.trim().charAt(0).toUpperCase();
+        
+        if (item.answer.includes(userAns) || userFirstChar === actualFirstChar) {
+          correctCount++;
+        }
+      }
+    });
+
+    const finalScore = gradableCount > 0 ? Math.round((correctCount / gradableCount) * 100) : 85;
+    setQuizScore(finalScore);
+
     const durationMinutes = Math.floor(actualSeconds / 60);
-    
-    if (durationMinutes >= 1) {
+    if (durationMinutes >= 1 || gradableCount > 0) { 
       try {
         const token = localStorage.getItem('token');
         const subjectName = localStorage.getItem('practiceSubject') || 'Practice Review';
         
         await axios.post('http://localhost:5000/api/practice/log-session', {
           subjectName: subjectName,
-          startTime: sessionStartTime,
+          startTime: sessionStartTime || new Date().toISOString(),
           endTime: new Date().toISOString(),
-          durationMinutes: durationMinutes,
-          focusScore: 85 
+          durationMinutes: Math.max(durationMinutes, 1), 
+          focusScore: finalScore 
         }, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        setSaveSuccess(`Session Completed! ${durationMinutes} minutes recorded to Analytics.`);
-        setTimeout(() => setSaveSuccess(''), 5000);
-
+        setSaveSuccess(`Evaluation Complete! Score: ${finalScore}%. Data logged to Analytics.`);
+        setTimeout(() => setSaveSuccess(''), 6000);
       } catch (err) {
-        console.error("Failed to auto-log session", err);
-        setSaveError("Session finished, but failed to sync to Dashboard.");
+        setSaveError("Evaluated, but failed to sync to Dashboard.");
       }
     } else {
-      setSaveError("Session too short to record (Under 1 minute).");
+      setSaveError("Session too short to record analytics.");
       setTimeout(() => setSaveError(''), 5000);
     }
   };
 
   const handleGenerateMore = async () => {
     setGenerateError('');
-
     const selectedTopics = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
     const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     const selectedMode = modeMap[settings.mode];
 
-    if (!selectedMode) {
-      setGenerateError('Please select a practice mode first.');
+    if (!selectedMode || selectedTopics.length === 0) {
+      setGenerateError('Mode and topics required.');
       return;
     }
-
-    if (!Array.isArray(selectedTopics) || selectedTopics.length === 0) {
-      setGenerateError('Select topics first, then generate more questions.');
-      return;
-    }
-
-    const difficultyMap = {
-      Easy: 'easy',
-      Medium: 'medium',
-      Hard: 'hard',
-      'Exam Level': 'exam'
-    };
 
     const payload = {
       mode: selectedMode,
       topic: selectedTopics.join(', '),
-      difficulty: difficultyMap[settings.difficulty] || 'medium',
+      difficulty: { 'Easy': 'easy', 'Medium': 'medium', 'Hard': 'hard', 'Exam Level': 'exam' }[settings.difficulty] || 'medium',
       numQuestions: Number(settings.questionCount) || 5
+      // Removed userQuery entirely
     };
-
-    if (selectedMode === 'ai') {
-      if (!aiQuery.trim()) {
-        setGenerateError('Enter your AI query before generating.');
-        return;
-      }
-      payload.userQuery = aiQuery.trim();
-    }
 
     setIsGenerating(true);
 
@@ -223,19 +213,15 @@ const PractiseQuiz = () => {
       });
 
       const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || 'Failed to generate more questions.');
-      }
+      if (!response.ok) throw new Error(data.message || 'Failed to generate questions.');
 
       const nextItems = Array.isArray(data.data) ? data.data : [];
-      const storedResults = {
-        mode: settings.mode || '',
-        items: nextItems
-      };
-      localStorage.setItem(RESULTS_KEY, JSON.stringify(storedResults));
+      localStorage.setItem(RESULTS_KEY, JSON.stringify({ mode: settings.mode, items: nextItems }));
       setItems(nextItems);
 
+      setUserAnswers({});
+      setIsSubmitted(false);
+      setQuizScore(null);
       setStudiedSeconds(0);
       setSessionStartTime(null);
       setIsFocusActive(false);
@@ -250,16 +236,7 @@ const PractiseQuiz = () => {
   const handleSaveToLibrary = async (titleValue) => {
     const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     const selectedMode = modeMap[settings.mode];
-
-    if (!selectedMode) {
-      setSaveError('Select a mode before saving.');
-      return;
-    }
-
-    if (!items || items.length === 0) {
-      setSaveError('Generate content before saving.');
-      return;
-    }
+    if (!selectedMode || items.length === 0) return;
 
     setIsSaving(true);
     setSaveError('');
@@ -267,121 +244,103 @@ const PractiseQuiz = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const selectedTopics = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
-      const subjectName = localStorage.getItem('practiceSubject') || 'General';
-
       const payload = {
         title: titleValue.trim(),
         type: selectedMode,
-        category: subjectName, 
-        content: {
-          items,
-          meta: {
-            mode: settings.mode,
-            topics: selectedTopics,
-            difficulty: settings.difficulty,
-            numQuestions: settings.questionCount
-          }
-        }
+        category: localStorage.getItem('practiceSubject') || 'General', 
+        content: { items, meta: { mode: settings.mode } }
       };
 
-      const response = await fetch('http://localhost:5000/api/library/save-content', {
+      await fetch('http://localhost:5000/api/library/save-content', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to save content.');
-      }
-
       setIsSaveModalOpen(false);
-      setContentTitle('');
-      setContentTitleError('');
       setSaveSuccess('Saved to library.');
     } catch (error) {
-      setSaveError(error.message);
+      setSaveError('Failed to save content.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const openSaveModal = () => {
-    setContentTitle('');
-    setContentTitleError('');
-    setIsSaveModalOpen(true);
-  };
-
-  const submitContentTitle = () => {
-    if (!contentTitle.trim()) {
-      setContentTitleError('Title is required.');
-      return;
-    }
-    handleSaveToLibrary(contentTitle);
-  };
-
   const renderItem = (item, index) => {
-    if (item?.answer && !item?.question && !item?.scenario && !item?.section) {
-      return (
-        <div key={`ai-${index}`} className={styles.resultItem}>
-          <div className={styles.resultQuestion}>AI Response</div>
-          <div className={styles.resultAnswer}>{item.answer}</div>
-          {Array.isArray(item.followups) && item.followups.length > 0 && (
-            <ul className={styles.resultOptions}>
-              {item.followups.map((followup, followIndex) => (
-                <li key={`ai-follow-${followIndex}`}>{followup}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      );
+    const isMCQ = Array.isArray(item.options) && item.options.length > 0;
+    
+    let isCorrect = false;
+    if (isSubmitted && isMCQ && item.answer) {
+        const uFirst = (userAnswers[index] || '').trim().charAt(0).toUpperCase();
+        const aFirst = item.answer.trim().charAt(0).toUpperCase();
+        if (item.answer.includes(userAnswers[index]) || uFirst === aFirst) {
+            isCorrect = true;
+        }
     }
 
-    if (item?.scenario && Array.isArray(item.questions)) {
-      return (
-        <div key={`case-${index}`} className={styles.resultItem}>
-          <div className={styles.resultQuestion}>Case {index + 1}: {item.scenario}</div>
-          <ul className={styles.resultOptions}>
-            {item.questions.map((q, qIndex) => (
-              <li key={`case-q-${qIndex}`}>{q.question}</li>
-            ))}
-          </ul>
-        </div>
-      );
-    }
-
-    if (item?.section && Array.isArray(item.items)) {
-      return (
-        <div key={`section-${index}`} className={styles.resultItem}>
-          <div className={styles.resultQuestion}>Section: {item.section}</div>
-          <ul className={styles.resultOptions}>
-            {item.items.map((q, qIndex) => (
-              <li key={`section-q-${qIndex}`}>{q.question || q.answer || 'Answer key'}</li>
-            ))}
-          </ul>
-        </div>
-      );
-    }
-
+    // Apply staggered animation delay based on index
     return (
-      <div key={`${item.question}-${index}`} className={styles.resultItem}>
+      <div 
+        key={`${index}`} 
+        className={`${styles.resultItem} ${styles.animateSlideUp}`} 
+        style={{ 
+          animationDelay: `${index * 0.1}s`,
+          borderColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)') : '#334155',
+          backgroundColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)') : 'transparent'
+      }}>
         <div className={styles.resultQuestion}>
-          Q{index + 1}. {item.question}
+          Q{index + 1}. {item.question || item.scenario || 'AI Content'}
         </div>
-        {Array.isArray(item.options) && item.options.length > 0 && (
-          <ul className={styles.resultOptions}>
-            {item.options.map((option, optIndex) => (
-              <li key={`${option}-${optIndex}`}>{option}</li>
-            ))}
-          </ul>
+        
+        {isMCQ && (
+          <div className={styles.interactiveOptions}>
+            {item.options.map((option, optIndex) => {
+              const isSelected = userAnswers[index] === option;
+              let btnClass = styles.optionBtn;
+              
+              if (isSubmitted) {
+                  const optFirst = option.charAt(0).toUpperCase();
+                  const ansFirst = item.answer.trim().charAt(0).toUpperCase();
+                  const isActuallyCorrect = item.answer.includes(option) || optFirst === ansFirst;
+                  
+                  if (isActuallyCorrect) btnClass = styles.optionBtnCorrect;
+                  else if (isSelected && !isActuallyCorrect) btnClass = styles.optionBtnWrong;
+                  else btnClass = styles.optionBtnDisabled;
+              } else if (isSelected) {
+                  btnClass = styles.optionBtnSelected;
+              }
+
+              return (
+                <button 
+                    key={optIndex} 
+                    className={btnClass} 
+                    onClick={() => !isSubmitted && handleAnswerChange(index, option)}
+                    disabled={isSubmitted}
+                >
+                  {option}
+                </button>
+              );
+            })}
+          </div>
         )}
-        {item.answer && <div className={styles.resultAnswer}>Answer: {item.answer}</div>}
-        {item.explanation && (
-          <div className={styles.resultExplain}>{item.explanation}</div>
+
+        {!isMCQ && !item.section && item.question && (
+            <textarea 
+                className={styles.interactiveTextarea}
+                placeholder={isSubmitted ? "" : "Type your answer here to evaluate..."}
+                value={userAnswers[index] || ''}
+                onChange={(e) => handleAnswerChange(index, e.target.value)}
+                disabled={isSubmitted}
+            />
+        )}
+
+        {isSubmitted && item.answer && (
+            <div className={styles.resultAnswer} style={{ marginTop: '15px' }}>
+                <strong>Actual Answer:</strong> {item.answer}
+            </div>
+        )}
+        {isSubmitted && item.explanation && (
+            <div className={styles.resultExplain}>{item.explanation}</div>
         )}
       </div>
     );
@@ -399,18 +358,16 @@ const PractiseQuiz = () => {
   return (
     <div className={styles.quizContainer}>
       
-      <header className={styles.quizHeader} style={{ alignItems: 'center', background: '#1e293b', padding: '20px', borderRadius: '16px', border: isFocusActive ? '1px solid #10b981' : '1px solid #334155' }}>
+      <header className={`${styles.quizHeader} ${styles.animateFadeInUp}`} style={{ alignItems: 'center', background: '#1e293b', padding: '20px', borderRadius: '16px', border: isFocusActive ? '1px solid #10b981' : '1px solid #334155' }}>
         <div>
-          <span className={styles.badge} style={{ color: isFocusActive ? '#10b981' : '#3b82f6' }}>
-            {isFocusActive ? 'Focus Engine Active' : 'Practice Lab'}
+          <span className={styles.badge} style={{ color: isFocusActive ? '#10b981' : (isSubmitted ? '#8b5cf6' : '#3b82f6') }}>
+            {isFocusActive ? 'Focus Engine Active' : (isSubmitted ? 'Evaluation Complete' : 'Practice Lab')}
           </span>
-          <h2 className={styles.quizTitle}>{modeLabel}</h2>
+          <h2 className={styles.quizTitle}>{modeLabel} {quizScore !== null ? `- Score: ${quizScore}%` : ''}</h2>
         </div>
         
         {items.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            
-            {/* NEW: DYNAMIC TIME INPUT */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(15, 23, 42, 0.4)', padding: '6px 12px', borderRadius: '8px', border: '1px solid #334155' }}>
               <Clock size={16} color="#94a3b8" />
               <input 
@@ -418,28 +375,19 @@ const PractiseQuiz = () => {
                 value={targetMinutes} 
                 onChange={handleTimeChange}
                 onBlur={handleTimeBlur}
-                style={{ 
-                  width: '40px', 
-                  background: 'transparent', 
-                  border: 'none', 
-                  color: '#fff', 
-                  fontSize: '1rem', 
-                  fontWeight: 'bold', 
-                  textAlign: 'center', 
-                  outline: 'none',
-                  fontVariantNumeric: 'tabular-nums'
-                }}
+                disabled={isSubmitted || isFocusActive}
+                style={{ width: '40px', background: 'transparent', border: 'none', color: '#fff', fontSize: '1rem', fontWeight: 'bold', textAlign: 'center', outline: 'none' }}
               />
               <span style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '600' }}>min</span>
             </div>
 
-            <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: isFocusActive ? '#10b981' : '#f8fafc', fontVariantNumeric: 'tabular-nums', minWidth: '100px', textAlign: 'center', letterSpacing: '1px' }}>
+            <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: isFocusActive ? '#10b981' : '#f8fafc', fontVariantNumeric: 'tabular-nums', minWidth: '100px', textAlign: 'center' }}>
               {formatTime(remainingSeconds)}
             </div>
 
             {isFocusActive && (
-              <button onClick={() => handleStopFocus()} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(239, 68, 68, 0.2)' }}>
-                <Square size={16} fill="white"/> Stop Focus
+              <button onClick={() => handleSubmitQuiz()} className={styles.btnPulseHover} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Square size={16} fill="white"/> End Early
               </button>
             )}
           </div>
@@ -452,15 +400,13 @@ const PractiseQuiz = () => {
         <section className={styles.resultsCard}>
           <div className={styles.resultsHeader}>
             <div>
-              <h3 className={styles.resultsTitle}>{modeLabel} Results</h3>
-              <p className={styles.resultsSub}>Save this set to your Library for later.</p>
+              <h3 className={styles.resultsTitle}>{modeLabel} Questions</h3>
+              <p className={styles.resultsSub}>
+                  {isSubmitted ? 'Review your performance below.' : 'Answers are hidden until you submit.'}
+              </p>
             </div>
-            <button
-              className={styles.secondaryAction}
-              onClick={openSaveModal}
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving...' : 'Save to Library'}
+            <button className={styles.secondaryAction} onClick={() => setIsSaveModalOpen(true)} disabled={isSaving}>
+              <Save size={16}/> {isSaving ? 'Saving...' : 'Save to Library'}
             </button>
           </div>
           <div className={styles.resultsList}>
@@ -470,38 +416,18 @@ const PractiseQuiz = () => {
       )}
 
       {/* --- ACTION ROW --- */}
-      <div className={styles.quizActionRow} style={{ alignItems: 'center' }}>
-        {modeMap[settings.mode] === 'ai' && (
-          <input
-            className={styles.textArea}
-            placeholder="Ask anything about your selected topics..."
-            value={aiQuery}
-            onChange={(event) => {
-              const next = event.target.value;
-              setAiQuery(next);
-              localStorage.setItem(AI_QUERY_KEY, next);
-            }}
-            style={{ flex: 1, minHeight: '44px' }}
-          />
-        )}
-        
-        <button
-          className={styles.finalAction}
-          onClick={handleGenerateMore}
-          disabled={isGenerating}
-        >
-          {isGenerating ? 'Generating...' : 'Generate'}
+      <div className={`${styles.quizActionRow} ${styles.animateFadeInUp}`} style={{ alignItems: 'center', animationDelay: '0.5s' }}>
+        <button className={styles.secondaryAction} onClick={handleGenerateMore} disabled={isGenerating}>
+          <RefreshCw size={16} className={isGenerating ? styles.spin : ''} /> {isGenerating ? 'Generating...' : 'Generate New Test'}
         </button>
 
-        {/* --- MARK AS COMPLETED BUTTON --- */}
-        {isFocusActive && (
+        {!isSubmitted && items.length > 0 && (
           <button
-            className={styles.secondaryAction}
-            onClick={() => handleStopFocus()}
-            style={{ marginLeft: 'auto', background: '#10b981', color: '#0f172a', border: 'none', display: 'flex', alignItems: 'center', fontWeight: 'bold', gap: '6px' }}
+            className={`${styles.finalAction} ${styles.btnPulseHover}`}
+            onClick={() => handleSubmitQuiz()}
+            style={{ marginLeft: 'auto', background: '#10b981', display: 'flex', alignItems: 'center', gap: '8px' }}
           >
-            <CheckCircle size={18} /> 
-            Mark as Completed
+            <CheckCircle size={18} /> Submit Test & Evaluate
           </button>
         )}
       </div>
@@ -509,7 +435,7 @@ const PractiseQuiz = () => {
       <div style={{ marginTop: '10px' }}>
         {generateError && <div className={styles.generateError}>{generateError}</div>}
         {saveError && <div className={styles.generateError} style={{color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)'}}>{saveError}</div>}
-        {saveSuccess && <div className={styles.successMessage} style={{color: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '10px', borderRadius: '8px'}}>{saveSuccess}</div>}
+        {saveSuccess && <div className={`${styles.successMessage} ${styles.animateFadeInUp}`} style={{color: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '10px', borderRadius: '8px'}}>{saveSuccess}</div>}
       </div>
 
       {isSaveModalOpen && (
@@ -517,25 +443,11 @@ const PractiseQuiz = () => {
           <div className={styles.modalCard}>
             <h3 className={styles.modalTitle}>Save to Library</h3>
             <p className={styles.modalText}>Enter a name for this content.</p>
-            <input
-              className={styles.modalInput}
-              value={contentTitle}
-              onChange={(event) => {
-                setContentTitle(event.target.value);
-                setContentTitleError('');
-              }}
-              placeholder="e.g., Mock Test - Unit 2"
-            />
-            {contentTitleError && (
-              <div className={styles.modalError}>{contentTitleError}</div>
-            )}
+            <input className={styles.modalInput} value={contentTitle} onChange={(e) => { setContentTitle(e.target.value); setContentTitleError(''); }} placeholder="e.g., Mock Test - Unit 2" />
+            {contentTitleError && <div className={styles.modalError}>{contentTitleError}</div>}
             <div className={styles.modalActions}>
-              <button className={styles.secondaryAction} onClick={() => setIsSaveModalOpen(false)}>
-                Cancel
-              </button>
-              <button className={styles.finalAction} onClick={submitContentTitle} disabled={isSaving}>
-                {isSaving ? 'Saving...' : 'Save'}
-              </button>
+              <button className={styles.secondaryAction} onClick={() => setIsSaveModalOpen(false)}>Cancel</button>
+              <button className={styles.finalAction} onClick={() => handleSaveToLibrary(contentTitle)} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save'}</button>
             </div>
           </div>
         </div>

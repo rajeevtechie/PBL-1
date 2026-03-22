@@ -1,6 +1,7 @@
 .settingsContainer {
   max-width: 1000px;
   margin: 0 auto;
+  padding: 2rem;
 }
 
 .header {
@@ -44,17 +45,21 @@
   text-align: left;
   transition: all 0.2s;
   background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
 }
 
 .navBtn:hover {
-  background-color: var(--bg-panel);
+  background-color: rgba(255, 255, 255, 0.05);
   color: var(--text-main);
 }
 
 .navBtn.active {
   background-color: var(--bg-panel);
   color: var(--primary);
+  border-color: var(--border-color);
   font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 /* MAIN PANEL */
@@ -62,8 +67,9 @@
   background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 2rem;
+  padding: 2.5rem;
   min-height: 500px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
 }
 
 .tabContent h2 {
@@ -86,25 +92,33 @@
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background-color: var(--primary);
+  background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 1.8rem;
   font-weight: 700;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
 }
 
 .changePhotoBtn {
   background-color: var(--bg-app);
   border: 1px solid var(--border-color);
   color: var(--text-main);
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: 10px 18px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 0.9rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: border-color 0.2s;
+}
+
+.changePhotoBtn:hover {
+  border-color: var(--primary);
 }
 
 /* FORMS */
@@ -135,28 +149,75 @@
 .inputGroup input, .inputGroup textarea {
   background-color: var(--bg-app);
   border: 1px solid var(--border-color);
-  padding: 12px;
+  padding: 14px;
   border-radius: 8px;
   color: var(--text-main);
   font-family: inherit;
+  font-size: 0.95rem;
   outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .inputGroup input:focus, .inputGroup textarea:focus {
   border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.inputGroup textarea {
+  resize: vertical;
+}
+
+.actionRow {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-top: 1rem;
 }
 
 .saveBtn {
-  align-self: flex-start;
   background-color: var(--primary);
   color: white;
-  padding: 10px 20px;
+  padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin-top: 1rem;
+  border: none;
+  cursor: pointer;
+  min-width: 170px; /* Slightly wider to fit loader */
+}
+
+.saveBtn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.successMsg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--success);
+  font-size: 0.9rem;
+  font-weight: 500;
+  background-color: rgba(16, 185, 129, 0.1);
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.errorMsg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 500;
+  background-color: rgba(239, 68, 68, 0.1);
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 /* TOGGLE SWITCHES */
@@ -197,7 +258,7 @@
   position: absolute;
   cursor: pointer;
   top: 0; left: 0; right: 0; bottom: 0;
-  background-color: var(--bg-app);
+  background-color: rgba(255, 255, 255, 0.1);
   transition: .4s;
   border-radius: 34px;
   border: 1px solid var(--border-color);
@@ -209,20 +270,20 @@
   height: 16px;
   width: 16px;
   left: 3px;
-  bottom: 3px;
+  bottom: 2px;
   background-color: var(--text-muted);
   transition: .4s;
   border-radius: 50%;
 }
 
 input:checked + .slider {
-  background-color: var(--success);
+  background-color: rgba(16, 185, 129, 0.2);
   border-color: var(--success);
 }
 
 input:checked + .slider:before {
   transform: translateX(20px);
-  background-color: white;
+  background-color: var(--success);
 }
 
 /* DANGER ZONE */
@@ -239,14 +300,63 @@ input:checked + .slider:before {
   margin: 0 0 0.5rem 0;
 }
 
+.dangerZone p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 1.2rem;
+}
+
 .deleteBtn {
-  margin-top: 1rem;
   background-color: var(--danger);
   color: white;
-  padding: 10px 16px;
-  border-radius: 6px;
+  padding: 12px 20px;
+  border-radius: 8px;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+/* --- GLOBAL ANIMATIONS --- */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animateFadeInUp {
+  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.btnPulseHover {
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+}
+
+.btnPulseHover:hover:not(:disabled) {
+  transform: scale(1.03);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+  .row {
+    grid-template-columns: 1fr;
+  }
+  .settingsPanel {
+    padding: 1.5rem;
+  }
 }

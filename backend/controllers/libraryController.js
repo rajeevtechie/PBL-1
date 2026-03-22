@@ -1,73 +1,51 @@
-const path = require('path');
-const fs = require('fs');
 const db = require('../config/db');
-const { LIBRARY_ITEM_TYPES, LIBRARY_ITEM_CATEGORIES } = require('../models/LibraryItem');
 
-const isValidType = (type) => LIBRARY_ITEM_TYPES.includes(type);
-const isValidCategory = (category) => LIBRARY_ITEM_CATEGORIES.includes(category);
-
+// --- 1. SAVE UPLOADED PDF TO DATABASE (LONGBLOB) ---
 exports.saveFile = async (req, res) => {
   try {
     const userId = req.user?.id;
-
-    if (!userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ message: 'File is required.' });
-    }
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!req.file) return res.status(400).json({ message: 'File is required.' });
 
     const title = (req.body?.title || '').trim();
-    if (!title) {
-      return res.status(400).json({ message: 'Title is required.' });
-    }
+    const category = (req.body?.category || 'General').trim(); 
+    
+    if (!title) return res.status(400).json({ message: 'Title is required.' });
 
-    const fileUrl = `/uploads/${req.file.filename}`;
+    // The raw PDF bytes from multer memory storage
+    const fileData = req.file.buffer; 
 
     await db.execute(
-      `INSERT INTO library_items (user_id, title, type, category, file_url, content)
-       VALUES (?, ?, ?, ?, ?, ?)`
-      , [userId, title, 'file', 'uploaded', fileUrl, null]
+      `INSERT INTO library_items (user_id, title, type, category, file_data)
+       VALUES (?, ?, ?, ?, ?)`
+      , [userId, title, 'file', category, fileData]
     );
 
-    res.status(201).json({
-      message: 'File saved to library.',
-      fileUrl
-    });
+    res.status(201).json({ message: 'File saved securely to database.' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to save file.', error: error.message });
   }
 };
 
+// --- 2. SAVE GENERATED CONTENT (QUIZZES/NOTES) ---
 exports.saveContent = async (req, res) => {
   try {
     const userId = req.user?.id;
-
-    if (!userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
     const title = (req.body?.title || '').trim();
     const type = req.body?.type;
     const content = req.body?.content;
+    const category = (req.body?.category || 'General').trim();
 
-    if (!title) {
-      return res.status(400).json({ message: 'Title is required.' });
-    }
-
-    if (!type || !isValidType(type) || type === 'file') {
-      return res.status(400).json({ message: 'Invalid content type.' });
-    }
-
-    if (!content) {
-      return res.status(400).json({ message: 'Content is required.' });
+    if (!title || !type || !content) {
+      return res.status(400).json({ message: 'Missing required fields.' });
     }
 
     await db.execute(
-      `INSERT INTO library_items (user_id, title, type, category, file_url, content)
-       VALUES (?, ?, ?, ?, ?, ?)`
-      , [userId, title, type, 'generated', null, JSON.stringify(content)]
+      `INSERT INTO library_items (user_id, title, type, category, content)
+       VALUES (?, ?, ?, ?, ?)`
+      , [userId, title, type, category, JSON.stringify(content)]
     );
 
     res.status(201).json({ message: 'Content saved to library.' });
@@ -76,104 +54,78 @@ exports.saveContent = async (req, res) => {
   }
 };
 
-exports.getUploaded = async (req, res) => {
+// --- 3. GET ALL LIBRARY ITEMS (For the Split-View Library) ---
+exports.getLibraryItems = async (req, res) => {
   try {
     const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    if (!userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
+    // IMPORTANT: DO NOT select file_data here to prevent massive payload crashes!
     const [rows] = await db.execute(
-      `SELECT id, title, type, category, file_url, created_at
+      `SELECT id, title, type, category, content, DATE_FORMAT(created_at, "%m/%d/%Y") as created_at
        FROM library_items
-       WHERE user_id = ? AND category = 'uploaded'
+       WHERE user_id = ?
        ORDER BY created_at DESC`,
       [userId]
     );
 
-    res.status(200).json(rows);
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch uploaded items.', error: error.message });
-  }
-};
-
-exports.getGenerated = async (req, res) => {
-  try {
-    const userId = req.user?.id;
-
-    if (!userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    const [rows] = await db.execute(
-      `SELECT id, title, type, category, content, created_at
-       FROM library_items
-       WHERE user_id = ? AND category = 'generated'
-       ORDER BY created_at DESC`,
-      [userId]
-    );
-
+    // Safely parse JSON for generated content
     const parsed = rows.map((row) => {
-      // 1. If it's already null, return safely
-      if (!row.content) {
-        return { ...row, content: null };
-      }
-
+      if (!row.content) return { ...row, content: null };
+      
       let finalContent = row.content;
-
-      // 2. ONLY parse if it arrived as a string. 
-      // If the MySQL driver already converted it to an object, leave it alone!
       if (typeof finalContent === 'string') {
-        try {
-          finalContent = JSON.parse(finalContent);
-        } catch (parseError) {
-          console.error(`Failed to parse content for item ${row.id}`);
-          finalContent = null; 
-        }
+          try {
+            finalContent = JSON.parse(finalContent);
+          } catch (parseError) {
+            console.error(`Failed to parse content for item ${row.id}`);
+            finalContent = row.content; 
+          }
       }
-
       return { ...row, content: finalContent };
     });
 
     res.status(200).json(parsed);
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch generated items.', error: error.message });
+    res.status(500).json({ message: 'Failed to fetch items.' });
   }
 };
 
+// --- 4. SERVE RAW PDF BYTES (For the Split-Screen Viewer) ---
+exports.serveFile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const fileId = req.params.id;
+
+        const [rows] = await db.execute(
+            'SELECT file_data, title FROM library_items WHERE id = ? AND user_id = ?',
+            [fileId, userId]
+        );
+
+        if (rows.length === 0 || !rows[0].file_data) {
+            return res.status(404).json({ message: "File not found or no PDF data available." });
+        }
+
+        res.contentType('application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${rows[0].title}.pdf"`);
+        res.send(rows[0].file_data);
+
+    } catch (error) {
+        res.status(500).json({ message: "Failed to serve PDF" });
+    }
+};
+
+// --- 5. DELETE ITEM ---
 exports.deleteItem = async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    const itemId = Number(req.params.id);
-
-    if (!userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
+    try {
+      const userId = req.user?.id;
+      const itemId = Number(req.params.id);
+      
+      // Since we are no longer using the file system (fs.unlink), we just delete the database row!
+      await db.execute(`DELETE FROM library_items WHERE id = ? AND user_id = ?`, [itemId, userId]);
+      
+      res.status(200).json({ message: 'Item deleted.' });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete.' });
     }
-
-    if (!itemId) {
-      return res.status(400).json({ message: 'Invalid item id.' });
-    }
-
-    const [rows] = await db.execute(
-      `SELECT id, category, file_url FROM library_items WHERE id = ? AND user_id = ?`,
-      [itemId, userId]
-    );
-
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Item not found.' });
-    }
-
-    const item = rows[0];
-    if (item.category === 'uploaded' && item.file_url) {
-      const filePath = path.join(__dirname, '..', item.file_url);
-      fs.unlink(filePath, () => {});
-    }
-
-    await db.execute(`DELETE FROM library_items WHERE id = ? AND user_id = ?`, [itemId, userId]);
-
-    res.status(200).json({ message: 'Item deleted.' });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to delete item.', error: error.message });
-  }
 };

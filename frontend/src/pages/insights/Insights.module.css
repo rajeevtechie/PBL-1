@@ -32,11 +32,27 @@
   padding-right: 10px; /* Space for scrollbar */
 }
 
+/* Hide scrollbar for a cleaner look but keep functionality */
+.feedColumn::-webkit-scrollbar {
+  width: 6px;
+}
+.feedColumn::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 10px;
+}
+
 .insightCard {
   background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 1.5rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.insightCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+  border-color: #475569;
 }
 
 .cardHeader {
@@ -114,6 +130,12 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+
+.resourceLink:hover {
+  background-color: rgba(59, 130, 246, 0.1);
 }
 
 .resourceIcon {
@@ -150,6 +172,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background-color: var(--bg-panel);
 }
 
 .chatHeader h3 {
@@ -163,6 +186,13 @@
   background-color: var(--success);
   border-radius: 50%;
   box-shadow: 0 0 8px var(--success);
+  animation: pulseDot 2s infinite;
+}
+
+@keyframes pulseDot {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
 .chatWindow {
@@ -173,6 +203,16 @@
   flex-direction: column;
   gap: 16px;
   background-color: #0f172a;
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar for chat */
+.chatWindow::-webkit-scrollbar {
+  width: 4px;
+}
+.chatWindow::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 10px;
 }
 
 .message {
@@ -182,6 +222,7 @@
   font-size: 0.95rem;
   line-height: 1.5;
   position: relative;
+  word-wrap: break-word;
 }
 
 .aiMessage {
@@ -189,6 +230,7 @@
   background-color: var(--bg-panel);
   color: var(--text-main);
   border-bottom-left-radius: 2px;
+  border: 1px solid var(--border-color);
 }
 
 .userMessage {
@@ -196,11 +238,12 @@
   background-color: var(--primary);
   color: white;
   border-bottom-right-radius: 2px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
 .time {
   display: block;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   margin-top: 6px;
   opacity: 0.7;
   text-align: right;
@@ -222,6 +265,11 @@
   padding: 10px 16px;
   color: var(--text-main);
   outline: none;
+  transition: border-color 0.2s;
+}
+
+.chatInputArea input:focus {
+  border-color: var(--primary);
 }
 
 .chatInputArea button {
@@ -233,4 +281,80 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  border: none;
+  cursor: pointer;
+}
+
+.chatInputArea button:disabled {
+  background-color: var(--border-color);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* --- TYPING INDICATOR --- */
+.typingIndicator {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 16px 20px;
+  width: fit-content;
+}
+
+.typingIndicator span {
+  width: 6px;
+  height: 6px;
+  background-color: var(--text-muted);
+  border-radius: 50%;
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typingIndicator span:nth-child(1) { animation-delay: -0.32s; }
+.typingIndicator span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1); }
+}
+
+/* --- GLOBAL ANIMATIONS --- */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animateFadeInUp {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.btnPulseHover {
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+}
+
+.btnPulseHover:hover {
+  transform: scale(1.05);
+}
+
+/* Make layout stack on small screens */
+@media (max-width: 968px) {
+  .insightsContainer {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .chatColumn {
+    height: 500px;
+  }
+  .feedColumn {
+    height: auto;
+    overflow-y: visible;
+  }
 }
