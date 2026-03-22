@@ -25,7 +25,10 @@ const StudySession = () => {
   useEffect(() => {
     // Pull data using your exact Practice Lab keys
     const selectedTopics = JSON.parse(localStorage.getItem('practiceSelectedTopics') || '[]');
-    const quizResults = JSON.parse(localStorage.getItem('practiceQuizResults') || '[]');
+    const storedResults = JSON.parse(localStorage.getItem('practiceQuizResults') || '[]');
+    const quizResults = Array.isArray(storedResults)
+      ? storedResults
+      : (storedResults && Array.isArray(storedResults.items) ? storedResults.items : []);
     const settings = JSON.parse(localStorage.getItem('practiceSettings') || '{}');
 
     // Set the Main Focus Topic dynamically based on what they selected

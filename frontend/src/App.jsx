@@ -17,6 +17,7 @@ import Analytics from './pages/analytics/Analytics';  // Feature 4 & 6: Velocity
 import Assessment from './pages/practise_lab/practise_lab'; // Feature 1: Practice Lab
 import PractiseTopics from './pages/practise_lab/practise_topics';
 import PractiseQuiz from './pages/practise_lab/practise_quiz';
+import Library from './pages/library/Library';
 import Insights from './pages/insights/Insights';     // Feature 2: AI Narratives
 import Settings from './pages/settings/Settings';     // User Config
 
@@ -56,6 +57,7 @@ function App() {
           <Route path="/assessment" element={<Assessment />} />
           <Route path="/practice-topics" element={<PractiseTopics />} />
           <Route path="/practice-quiz" element={<PractiseQuiz />} />
+          <Route path="/library" element={<Library />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="/settings" element={<Settings />} />
         </Route>

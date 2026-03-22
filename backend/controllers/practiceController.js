@@ -14,6 +14,45 @@ const normalizeArray = (data) => {
   return [data];
 };
 
+const toSafeString = (value) => (typeof value === "string" ? value.trim() : "");
+
+const normalizeByMode = (mode, data) => {
+  const items = normalizeArray(data).filter(Boolean);
+
+  switch (mode) {
+    case "quiz":
+      return items.filter(
+        (item) =>
+          toSafeString(item.question) &&
+          Array.isArray(item.options) &&
+          item.options.length > 0
+      );
+
+    case "short":
+    case "long":
+      return items.filter(
+        (item) => toSafeString(item.question) && toSafeString(item.answer)
+      );
+
+    case "case":
+      return items.filter(
+        (item) =>
+          toSafeString(item.scenario) && Array.isArray(item.questions)
+      );
+
+    case "mock":
+      return items.filter(
+        (item) => toSafeString(item.section) && Array.isArray(item.items)
+      );
+
+    case "ai":
+      return items.filter((item) => toSafeString(item.answer));
+
+    default:
+      return [];
+  }
+};
+
 // --- 1. GENERATE AI PRACTICE (Used in practise_quiz.jsx) ---
 exports.generatePractice = async (req, res, next) => {
   try {
@@ -49,7 +88,14 @@ exports.generatePractice = async (req, res, next) => {
     }
 
     const data = await generateJson({ prompt, retries: 1 });
-    const normalized = normalizeArray(data);
+    const normalized = normalizeByMode(mode, data);
+
+    if (!normalized.length) {
+      return res.status(422).json({
+        success: false,
+        message: "Generated content did not match the selected mode. Try again."
+      });
+    }
 
     res.status(200).json({ success: true, data: normalized });
   } catch (error) {
