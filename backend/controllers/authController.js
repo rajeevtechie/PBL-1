@@ -24,7 +24,7 @@ exports.register = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // 3. Save user to database (✅ FIXED: Using 'password_hash' column)
+        // 3. Save user to database (Using 'password_hash' column)
         const [result] = await db.execute(
             'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
             [name, email, hashedPassword]
@@ -63,7 +63,7 @@ exports.login = async (req, res) => {
 
         const user = users[0];
 
-        // 2. Compare passwords (✅ FIXED: Comparing against 'user.password_hash')
+        // 2. Compare passwords (✅ FIXED: Now correctly pointing to user.password_hash)
         const isMatch = await bcrypt.compare(password, user.password_hash);
         
         if (!isMatch) {

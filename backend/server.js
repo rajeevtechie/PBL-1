@@ -27,6 +27,8 @@ app.use('/api/practice', practiceRoutes); // Practice Lab
 app.use('/api/practice', practiceLabRoutes); // Practice Lab topic extraction
 app.use('/api/library', libraryRoutes); // Library
 const focusRoutes = require('./routes/focusRoutes');
+const insightRoutes = require('./routes/insightRoutes');
+app.use('/api/insights', insightRoutes);
 app.use('/api/focus', focusRoutes);
 
 // --- Test Route ---
