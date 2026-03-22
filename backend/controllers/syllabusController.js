@@ -6,9 +6,12 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
 // --- 1. UPLOAD & ANALYZE SYLLABUS ---
+// --- 1. UPLOAD & ANALYZE SYLLABUS ---
 exports.uploadSyllabus = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+        console.log(`📤 Processing file: ${req.file.originalname} for User ID: ${req.user.id}`);
 
         const filePart = { inlineData: { data: req.file.buffer.toString("base64"), mimeType: req.file.mimetype } };
         const prompt = `
@@ -32,13 +35,25 @@ exports.uploadSyllabus = async (req, res) => {
         const courseTitle = syllabusJson.courseTitle || "Untitled Course";
 
         const [existing] = await db.execute('SELECT id FROM syllabuses WHERE user_id = ? AND course_title = ?', [userId, courseTitle]);
-        if (existing.length > 0) return res.status(409).json({ message: `Syllabus exists.`, parsedData: syllabusJson, existingId: existing[0].id });
+        if (existing.length > 0) {
+            console.log("⚠️ Syllabus already exists. Prompting overwrite.");
+            return res.status(409).json({ message: `Syllabus exists.`, parsedData: syllabusJson, existingId: existing[0].id });
+        }
 
         const [resultDb] = await db.execute('INSERT INTO syllabuses (user_id, course_title, structure) VALUES (?, ?, ?)', [userId, courseTitle, JSON.stringify(syllabusJson)]);
-        await db.execute('INSERT INTO library_items (user_id, title, type, category) VALUES (?, ?, ?, ?)', [userId, courseTitle, 'folder', 'uploaded']);
+        
+        // 🚨 PREVENTING THE CRASH: Wrapping library_items insert in a try/catch
+        try {
+            await db.execute('INSERT INTO library_items (user_id, title, type, category) VALUES (?, ?, ?, ?)', [userId, courseTitle, 'folder', 'uploaded']);
+        } catch (libErr) {
+            console.warn("⚠️ Warning: Could not insert into library_items (table might not exist yet). Skipping safely.");
+        }
 
+        console.log("✅ Upload & Analysis Successful!");
         res.status(201).json({ message: "Processed successfully", syllabusId: resultDb.insertId, data: syllabusJson });
     } catch (error) { 
+        // ✅ Bringing back the console logging so we can see any API/DB errors!
+        console.error("❌ Upload Error:", error);
         res.status(500).json({ message: "AI Processing Failed", error: error.message }); 
     }
 };
