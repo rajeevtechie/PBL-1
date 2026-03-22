@@ -115,15 +115,25 @@ exports.getGenerated = async (req, res) => {
     );
 
     const parsed = rows.map((row) => {
+      // 1. If it's already null, return safely
       if (!row.content) {
         return { ...row, content: null };
       }
 
-      try {
-        return { ...row, content: JSON.parse(row.content) };
-      } catch (parseError) {
-        return { ...row, content: null };
+      let finalContent = row.content;
+
+      // 2. ONLY parse if it arrived as a string. 
+      // If the MySQL driver already converted it to an object, leave it alone!
+      if (typeof finalContent === 'string') {
+        try {
+          finalContent = JSON.parse(finalContent);
+        } catch (parseError) {
+          console.error(`Failed to parse content for item ${row.id}`);
+          finalContent = null; 
+        }
       }
+
+      return { ...row, content: finalContent };
     });
 
     res.status(200).json(parsed);

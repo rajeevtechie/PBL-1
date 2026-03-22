@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styles from './Library.module.css';
 
 const Library = () => {
+  const navigate = useNavigate();
   const [uploadedItems, setUploadedItems] = useState([]);
   const [generatedItems, setGeneratedItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState('');
   const [deleteSuccess, setDeleteSuccess] = useState('');
@@ -20,7 +21,6 @@ const Library = () => {
     const fetchItems = async () => {
       setLoading(true);
       setError('');
-      setSelected(null);
       setDeleteError('');
       setDeleteSuccess('');
 
@@ -74,13 +74,79 @@ const Library = () => {
     return item.type?.toUpperCase() || 'CONTENT';
   };
 
+  // --- UPGRADED, HYPER-RESILIENT VIEW HANDLER ---
   const handleView = (item) => {
+    // 1. PDF Handling
     if (item.category === 'uploaded' && item.file_url) {
       window.open(`http://localhost:5000${item.file_url}`, '_blank');
       return;
     }
 
-    setSelected(item);
+    // 2. Safely unpack the generated content
+    let rawContent = item.content;
+    
+    // Aggressive JSON parsing to strip away multiple stringification layers
+    let parseAttempts = 0;
+    while (typeof rawContent === 'string' && parseAttempts < 5) {
+      try {
+        const parsed = JSON.parse(rawContent);
+        if (typeof parsed === 'string' && parsed === rawContent) break;
+        rawContent = parsed;
+        parseAttempts++;
+      } catch (e) {
+        break; // Stop if it's no longer valid JSON
+      }
+    }
+
+    let extractedItems = [];
+
+    // Safely hunt down the actual array of questions, no matter how it was saved
+    if (Array.isArray(rawContent)) {
+      extractedItems = rawContent;
+    } else if (rawContent && Array.isArray(rawContent.items)) {
+      extractedItems = rawContent.items;
+    } else if (rawContent && typeof rawContent === 'object') {
+      // Find ANY array property inside the object as a desperate fallback
+      for (const key in rawContent) {
+        if (Array.isArray(rawContent[key])) {
+          extractedItems = rawContent[key];
+          break;
+        }
+      }
+    }
+
+    // If it's STILL empty, create a Data Recovery card so the user can at least see their text
+    if (!extractedItems || extractedItems.length === 0) {
+      extractedItems = [{
+        question: "Raw Data Dump (Parse Failed)",
+        answer: typeof rawContent === 'object' ? JSON.stringify(rawContent, null, 2) : String(rawContent),
+        explanation: "The system could not find a standard array of questions in this saved item. This can happen with older saves or unique AI responses."
+      }];
+    }
+
+    // Map backend type back to UI Mode label
+    const typeToModeMap = {
+      'quiz': 'Quiz (MCQ)',
+      'short': 'Short Answer',
+      'long': 'Long Answer',
+      'case': 'Case Study',
+      'mock': 'Mock Test',
+      'ai': 'AI Ask'
+    };
+    const uiMode = typeToModeMap[item.type] || item.type;
+
+    // 3. Inject data back into LocalStorage just like a fresh generation
+    const resultsPayload = { 
+      mode: uiMode, 
+      items: extractedItems 
+    };
+
+    localStorage.setItem('practiceQuizResults', JSON.stringify(resultsPayload));
+    localStorage.setItem('practiceSettings', JSON.stringify({ mode: uiMode }));
+    localStorage.setItem('practiceSubject', item.category || 'Library Review');
+
+    // 4. Route instantly to the Practice Quiz page
+    navigate('/practice-quiz');
   };
 
   const requestDelete = (item) => {
@@ -133,6 +199,7 @@ const Library = () => {
 
       {!loading && !error && (
         <div className={styles.sections}>
+          
           <section className={styles.sectionBlock}>
             <div className={styles.sectionHeader}>
               <h3>Uploaded Materials</h3>
@@ -189,19 +256,6 @@ const Library = () => {
             </div>
           </section>
         </div>
-      )}
-
-      {selected && selected.content && (
-        <section className={styles.detailPanel}>
-          <div className={styles.detailHeader}>
-            <div>
-              <h3>{selected.title}</h3>
-              <p>Type: {selected.type}</p>
-            </div>
-            <button className={styles.closeBtn} onClick={() => setSelected(null)}>Close</button>
-          </div>
-          <pre className={styles.detailBody}>{JSON.stringify(selected.content, null, 2)}</pre>
-        </section>
       )}
 
       {deleteTarget && (
