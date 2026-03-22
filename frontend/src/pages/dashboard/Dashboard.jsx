@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, TrendingUp, Clock, ArrowRight, BookOpen, Briefcase, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios'; // Added axios for data fetching
 import UploadModal from '../../Components/common/UploadModal/UploadModal'; 
 import SubjectLibrary from '../../Components/common/SubjectLibrary/SubjectLibrary';
 import styles from './Dashboard.module.css';
@@ -8,6 +9,39 @@ import styles from './Dashboard.module.css';
 const Dashboard = () => {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false); 
+
+  // --- DYNAMIC ANALYTICS STATE ---
+  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState({
+    avgFocus: 0,
+    consistencyData: [0, 0, 0, 0, 0, 0, 0],
+    peakTime: "Analyzing...",
+    peakDesc: "Log a focus session to unlock AI timing insights."
+  });
+
+  // --- FETCH ANALYTICS DATA ON MOUNT ---
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await axios.get('http://localhost:5000/api/insights/dashboard', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (response.data.success) {
+          setMetrics(response.data.data);
+        }
+      } catch (error) {
+        console.error("Dashboard analytics fetch error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
 
   // --- FIXED: Function to run when upload finishes ---
   const handleRoadmapReady = (newSyllabusId) => {
@@ -102,43 +136,54 @@ const Dashboard = () => {
         <p className={styles.cardSubtext}>Next: LeetCode Medium (Arrays)</p>
       </section>
 
-      {/* 3. CONSISTENCY GRAPH */}
+      {/* 3. DYNAMIC CONSISTENCY GRAPH */}
       <section className={styles.consistencySection}>
         <div className={styles.sectionTitle}>
           <TrendingUp size={18} />
-          <span>Consistency Score</span>
+          <span>Focus & Consistency</span>
         </div>
         
         <div className={styles.statsRow}>
           <div className={styles.statItem}>
-            <span className={styles.statValue}>85%</span>
-            <span className={styles.statLabel}>Consistency</span>
+            <span className={styles.statValue}>{metrics.avgFocus}%</span>
+            <span className={styles.statLabel}>Avg Focus</span>
           </div>
           <div className={styles.statItem}>
-            <span className={styles.statValue}>12 Days</span>
-            <span className={styles.statLabel}>Current Streak</span>
+            {/* Counts how many days out of the last 7 had active study sessions */}
+            <span className={styles.statValue}>
+              {metrics.consistencyData.filter(d => d > 0).length} / 7
+            </span>
+            <span className={styles.statLabel}>Active Days</span>
           </div>
         </div>
 
         <div className={styles.graphPlaceholder}>
-           <div className={styles.bar} style={{height: '40%'}}></div>
-           <div className={styles.bar} style={{height: '60%'}}></div>
-           <div className={styles.bar} style={{height: '30%'}}></div>
-           <div className={styles.bar} style={{height: '80%'}}></div>
-           <div className={styles.bar} style={{height: '100%', opacity: 1}}></div>
-           <div className={styles.bar} style={{height: '70%'}}></div>
-           <div className={styles.bar} style={{height: '90%'}}></div>
+           {/* Maps the 0-4 intensity scale to vertical CSS heights */}
+           {metrics.consistencyData.map((level, i) => {
+             const heights = ['10%', '35%', '60%', '85%', '100%'];
+             return (
+               <div 
+                 key={i} 
+                 className={styles.bar} 
+                 style={{
+                   height: heights[level], 
+                   opacity: level === 0 ? 0.2 : 0.6 + (level * 0.1),
+                   transition: 'height 0.5s ease, opacity 0.5s ease'
+                 }}
+               ></div>
+             );
+           })}
         </div>
       </section>
 
-      {/* 4. FLOW STATE INDICATOR */}
+      {/* 4. DYNAMIC FLOW STATE INDICATOR */}
       <section className={styles.flowCard}>
          <div className={styles.sectionTitle}>
             <Clock size={18} />
             <span>Peak Productivity</span>
          </div>
-         <div className={styles.flowTime}>10 PM - 1 AM</div>
-         <p className={styles.flowNote}>Your brain is most active at night.</p>
+         <div className={styles.flowTime}>{metrics.peakTime}</div>
+         <p className={styles.flowNote}>{metrics.peakDesc}</p>
       </section>
 
       {/* 5. AI INSIGHT TEASER */}
@@ -149,7 +194,7 @@ const Dashboard = () => {
          </div>
          <p className={styles.insightText}>
             "Rajeev, you are spending 40% of time on Planning but only 20% on Deep Work. 
-            Try shifting Data Structures to your 10 PM slot."
+            Try shifting Data Structures to your {metrics.peakTime !== 'Analyzing...' ? metrics.peakTime.split(' - ')[0] : '10 PM'} slot."
          </p>
       </section>
 
