@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS weekly_insights (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+
 -- ✅ NEW FEATURE: Added your new Library Items table
 CREATE TABLE IF NOT EXISTS library_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -110,9 +111,33 @@ CREATE TABLE IF NOT EXISTS library_items (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+ALTER TABLE library_items MODIFY category VARCHAR(255) NOT NULL;
+ALTER TABLE library_items ADD COLUMN file_data LONGBLOB;
+
 -- ✅ INDEXES: Combined both our performance indexes and your new library index
 CREATE INDEX idx_library_user_category ON library_items(user_id, category);
 CREATE INDEX idx_tasks_user_status ON tasks(user_id, status);
 CREATE INDEX idx_tasks_deadline ON tasks(deadline);
 CREATE INDEX idx_sessions_user_time ON study_sessions(user_id, start_time);
 CREATE INDEX idx_quizzes_user_syllabus ON quizzes(user_id, syllabus_id);
+
+-- 1. Disable foreign key checks to prevent dependency errors during deletion
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 2. Clear the core authentication table
+TRUNCATE TABLE users;
+
+-- 3. Clear all academic roadmap and library data
+TRUNCATE TABLE syllabuses;
+TRUNCATE TABLE library_items;
+
+-- 4. Clear all AI career gap analysis data
+TRUNCATE TABLE career_goals;
+TRUNCATE TABLE roadmap_recommendations;
+
+-- 5. Clear all analytics and focus session data (if you named your tables this way)
+-- TRUNCATE TABLE focus_sessions;
+-- TRUNCATE TABLE practice_logs;
+
+-- 6. Re-enable foreign key checks to secure the database again
+SET FOREIGN_KEY_CHECKS = 1;

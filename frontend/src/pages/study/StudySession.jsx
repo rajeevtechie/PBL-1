@@ -1,316 +1,227 @@
 import React, { useState, useEffect } from 'react';
-import { X, Play, Square, FileText, Video, Code, Clock, Activity, ListChecks } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Play, Square, X, Folder, BookOpen, Code, Edit3, Clock } from 'lucide-react';
 import axios from 'axios';
 import styles from './StudySession.module.css';
 
 const StudySession = () => {
+  const location = useLocation();
   const navigate = useNavigate();
-  
-  // --- STATE MANAGEMENT ---
-  const [isActive, setIsActive] = useState(false);
+
+  const [selectedSubject, setSelectedSubject] = useState(location.state?.subjectName || null);
+  const [subjects, setSubjects] = useState([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(!selectedSubject);
+
   const [targetMinutes, setTargetMinutes] = useState(25);
   const [remainingSeconds, setRemainingSeconds] = useState(25 * 60);
-  const [studiedSeconds, setStudiedSeconds] = useState(0); 
-  
-  const [showReflection, setShowReflection] = useState(false);
-  const [focusScore, setFocusScore] = useState(50);
+  const [isActive, setIsActive] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [notes, setNotes] = useState('');
 
-  // --- DYNAMIC DATA STATES ---
-  const [subjectName, setSubjectName] = useState("General Study");
-  const [resources, setResources] = useState([]);
-
-  // --- INTERCEPT PRACTICE LAB DATA ON LOAD ---
   useEffect(() => {
-    // Pull data using your exact Practice Lab keys
-    const selectedTopics = JSON.parse(localStorage.getItem('practiceSelectedTopics') || '[]');
-    const storedResults = JSON.parse(localStorage.getItem('practiceQuizResults') || '[]');
-    const quizResults = Array.isArray(storedResults)
-      ? storedResults
-      : (storedResults && Array.isArray(storedResults.items) ? storedResults.items : []);
-    const settings = JSON.parse(localStorage.getItem('practiceSettings') || '{}');
-
-    // Set the Main Focus Topic dynamically based on what they selected
-    const currentSubject = selectedTopics.length > 0 
-      ? selectedTopics.join(', ') 
-      : "General Focus Session";
-      
-    setSubjectName(currentSubject);
-
-    // Build the Resource Sidebar Dynamically
-    const dynamicCards = [];
-
-    // Card 1: Review base material
-    dynamicCards.push({
-      id: 'read-material',
-      title: 'Review Syllabus & Notes',
-      tag: 'Read',
-      icon: <FileText size={18} className={styles.icon} />,
-      action: () => navigate('/assessment') 
-    });
-
-    // Card 2: Dynamic YouTube Search based on their FIRST selected topic
-    if (selectedTopics.length > 0) {
-      dynamicCards.push({
-        id: 'youtube-visual',
-        title: `${selectedTopics[0]} Visualized`,
-        tag: 'Watch',
-        icon: <Video size={18} className={styles.icon} />,
-        action: () => window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(selectedTopics[0] + ' computer science explanation')}`, '_blank')
-      });
+    if (!selectedSubject) {
+      const fetchSubjects = async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const res = await axios.get('http://localhost:5000/api/syllabus/list', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setSubjects(res.data);
+        } catch (err) {
+          console.error("Failed to load subjects");
+        } finally {
+          setLoadingSubjects(false);
+        }
+      };
+      fetchSubjects();
     }
+  }, [selectedSubject]);
 
-    // Card 3: Link to the generated quiz or prompt to make one
-    if (quizResults.length > 0) {
-      dynamicCards.push({
-        id: 'solve-quiz',
-        title: `Solve Generated ${settings.mode || 'Quiz'}`,
-        tag: 'Practice',
-        icon: <ListChecks size={18} className={styles.icon} />,
-        action: () => navigate('/practice-quiz') 
-      });
-    } else {
-      dynamicCards.push({
-        id: 'make-quiz',
-        title: 'Generate Practice Set',
-        tag: 'Code',
-        icon: <Code size={18} className={styles.icon} />,
-        action: () => navigate('/practice-topics')
-      });
-    }
-
-    setResources(dynamicCards);
-  }, [navigate]);
-
-  // --- TIMING LOGIC (Background-Tab Proof) ---
   useEffect(() => {
     let interval;
-    if (isActive) {
-      const storedEndTime = localStorage.getItem('studyEndTime');
-      let expectedEndTime;
-
-      if (!storedEndTime) {
-        expectedEndTime = Date.now() + (targetMinutes * 60 * 1000);
-        localStorage.setItem('studyEndTime', expectedEndTime.toString());
-        setSessionStartTime(new Date().toISOString());
-      } else {
-        expectedEndTime = parseInt(storedEndTime, 10);
-      }
-
+    if (isActive && remainingSeconds > 0) {
       interval = setInterval(() => {
-        const now = Date.now();
-        const diffInSeconds = Math.round((expectedEndTime - now) / 1000);
-
-        if (diffInSeconds <= 0) {
-          clearInterval(interval);
-          setRemainingSeconds(0);
-          handleSessionComplete(targetMinutes * 60); 
-        } else {
-          setRemainingSeconds(diffInSeconds);
-        }
+        setRemainingSeconds((prev) => prev - 1);
       }, 1000);
+    } else if (isActive && remainingSeconds === 0) {
+      clearInterval(interval);
+      handleStopSession(); 
     }
-
     return () => clearInterval(interval);
-  }, [isActive, targetMinutes]);
+  }, [isActive, remainingSeconds]);
 
-  // Keep timer display synced if target minutes change manually before starting
-  useEffect(() => {
-    if (!isActive) {
-      setRemainingSeconds(targetMinutes * 60);
-    }
-  }, [targetMinutes, isActive]);
-
-  // --- HANDLERS ---
-  const handleStart = () => {
+  const handleStartSession = () => {
     setIsActive(true);
-    setShowReflection(false);
+    setSessionStartTime(new Date().toISOString());
   };
 
-  const handleSessionComplete = (totalSecondsStudied) => {
+  const handleStopSession = async () => {
     setIsActive(false);
-    setStudiedSeconds(totalSecondsStudied);
-    localStorage.removeItem('studyEndTime');
-    setShowReflection(true);
-  };
+    const actualStudiedSeconds = (targetMinutes * 60) - remainingSeconds;
+    const durationMinutes = Math.floor(actualStudiedSeconds / 60);
 
-  const handleStopEarly = () => {
-    const actualSeconds = (targetMinutes * 60) - remainingSeconds;
-    handleSessionComplete(actualSeconds);
-  };
-
-  const handleSaveSession = async () => {
-    const durationMinutes = Math.floor(studiedSeconds / 60);
-    const endTime = new Date().toISOString();
-
-    if (durationMinutes < 1) {
-      alert("Session too short! You must focus for at least 1 minute to log data.");
-      resetState();
-      return;
+    if (durationMinutes >= 1) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.post('http://localhost:5000/api/practice/log-session', {
+          subjectName: selectedSubject,
+          startTime: sessionStartTime,
+          endTime: new Date().toISOString(),
+          durationMinutes: durationMinutes,
+          focusScore: 90 
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        alert(`Awesome job! ${durationMinutes} minutes logged to your Dashboard.`);
+      } catch (err) {
+        console.error("Failed to log session:", err);
+      }
+    } else {
+      alert("Session was too short to record (under 1 minute).");
     }
 
-    try {
-      const token = localStorage.getItem('token');
-      const payload = {
-        subjectName: subjectName,
-        startTime: sessionStartTime,
-        endTime: endTime,
-        durationMinutes: durationMinutes,
-        focusScore: focusScore
-      };
-
-      await axios.post('http://localhost:5000/api/practice/log-session', payload, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      alert("Awesome work! Session logged successfully.");
-      resetState();
-
-    } catch (error) {
-      console.error("Error logging session:", error);
-      alert(error.response?.data?.message || "Failed to save session.");
-    }
-  };
-
-  const resetState = () => {
-    setIsActive(false);
     setRemainingSeconds(targetMinutes * 60);
     setSessionStartTime(null);
-    setShowReflection(false);
-    setFocusScore(50);
-    localStorage.removeItem('studyEndTime');
   };
 
-  // --- UPGRADED FORMAT TIME LOGIC (Supports > 60 mins) ---
+  const handleNavigateToPractice = () => {
+    if (selectedSubject === 'General Focus Session') {
+      navigate('/assessment');
+    } else {
+      navigate('/assessment', { state: { subjectName: selectedSubject } });
+    }
+  };
+
   const formatTime = (totalSeconds) => {
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
     const s = (totalSeconds % 60).toString().padStart(2, '0');
-    return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+    return `${m}:${s}`;
   };
 
+  // --- STEP 0: SUBJECT SELECTION GATE ---
+  if (!selectedSubject) {
+    return (
+      <div className={styles.container}>
+        <header className={`${styles.header} ${styles.animateFadeInUp}`}>
+          <div>
+            <span className={styles.badge}>Focus Engine</span>
+            <h2>What are we studying today?</h2>
+            <p className={styles.subText}>Select a subject to accurately track your progress.</p>
+          </div>
+        </header>
+        
+        {loadingSubjects ? <p style={{color: '#94a3b8'}}>Loading your subjects...</p> : (
+          <div className={styles.subjectGrid}>
+            {subjects.length === 0 ? (
+               <div className={`${styles.subjectCard} ${styles.animateFadeInUp}`}>
+                 <p style={{color: '#94a3b8'}}>No subjects found. Upload a syllabus from the Dashboard first.</p>
+               </div>
+            ) : (
+              [{ id: 'general', course_title: 'General Focus Session' }, ...subjects].map((sub, index) => (
+                <div 
+                  key={sub.id} 
+                  className={`${styles.subjectCard} ${styles.animateFadeInUp}`} 
+                  onClick={() => setSelectedSubject(sub.course_title)}
+                  style={{ animationDelay: `${index * 0.1}s` }}
+                >
+                  <Folder size={32} color={sub.id === 'general' ? '#10b981' : '#38bdf8'} />
+                  <h3>{sub.course_title}</h3>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- STEP 1: MAIN FOCUS UI ---
   return (
-    <div className={styles.focusContainer}>
-      
-      {/* HEADER */}
-      <header className={styles.header}>
-        <div className={styles.topicInfo}>
-          <span className={styles.badge}>Focus Mode</span>
-          <h1>{subjectName}</h1>
+    <div className={styles.container}>
+      <header className={`${styles.headerRow} ${styles.animateFadeInUp}`}>
+        <div>
+          <span className={styles.badge}>FOCUS MODE</span>
+          <h2 className={styles.title}>{selectedSubject}</h2>
         </div>
-        <button className={styles.exitBtn} onClick={() => {
-          if (isActive) handleStopEarly();
-          else navigate('/dashboard');
-        }}>
-          <X size={20} />
-          <span>{isActive ? "End Early" : "Exit"}</span>
+        <button className={`${styles.exitBtn} ${styles.btnPulseHover}`} onClick={() => navigate('/dashboard')}>
+          <X size={16} /> Exit
         </button>
       </header>
 
-      {/* GRID LAYOUT */}
-      <div className={styles.contentGrid}>
+      <div className={styles.splitLayout}>
         
-        {/* LEFT COLUMN: TIMER */}
-        <main className={styles.timerSection}>
-          {!showReflection ? (
-            <>
-              {!isActive && (
-                <div className={styles.durationSetter}>
-                  <Clock size={16} />
-                  
-                  {/* WRAPPER HACK APPLIED HERE */}
-                  <div className={styles.inputWrapper}>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="480" 
-                      value={targetMinutes}
-                      onChange={(e) => {
-                        let val = Number(e.target.value);
-                        if (val > 480) val = 480; 
-                        if (val < 1 && e.target.value !== "") val = 1;
-                        setTargetMinutes(val);
-                      }}
-                      className={styles.durationInput}
-                    />
-                  </div>
-                  
-                  <span>mins</span>
-                </div>
-              )}
+        {/* LEFT PANEL: TIMER */}
+        <div className={`${styles.timerPanel} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.1s' }}>
+          <div className={styles.timeSelector}>
+            <Clock size={16} color="#94a3b8"/>
+            <input 
+              type="number" 
+              value={targetMinutes}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (val > 0) {
+                  setTargetMinutes(val);
+                  if (!isActive) setRemainingSeconds(val * 60);
+                }
+              }}
+              disabled={isActive}
+              className={styles.timeInput}
+            />
+            <span>mins</span>
+          </div>
 
-              <div className={styles.timerCircle}>
-                <div className={styles.timeDisplay}>{formatTime(remainingSeconds)}</div>
-                <p className={styles.statusText}>{isActive ? "Stay Focused..." : "Ready to Start?"}</p>
-              </div>
-              
-              <div className={styles.controls}>
-                {!isActive ? (
-                  <button className={`${styles.toggleBtn} ${styles.startBtn}`} onClick={handleStart}>
-                    <Play size={32} fill="white" style={{marginLeft: '4px'}} />
-                  </button>
-                ) : (
-                  <button className={`${styles.toggleBtn} ${styles.stopBtn}`} onClick={handleStopEarly}>
-                    <Square size={24} fill="white" />
-                  </button>
-                )}
-              </div>
-            </>
+          <div className={styles.timerCircle}>
+            <div className={styles.timeDisplay}>{formatTime(remainingSeconds)}</div>
+            <div className={styles.timerStatus}>{isActive ? "Focusing..." : "Ready to Start?"}</div>
+          </div>
+
+          {!isActive ? (
+            <button className={`${styles.startBtn} ${styles.btnPulseHover}`} onClick={handleStartSession}>
+              <Play size={28} fill="currentColor" />
+            </button>
           ) : (
-            /* REFLECTION MODAL (Replaces Timer) */
-            <div className={styles.reflectionPhase}>
-                <h3><Activity size={22} color="#3b82f6" style={{marginRight: '10px'}}/> Session Complete</h3>
-                <p>You studied for <strong>{Math.floor(studiedSeconds / 60)} minutes</strong>. How focused were you?</p>
-                
-                <input 
-                    type="range" 
-                    min="1" 
-                    max="100" 
-                    value={focusScore}
-                    onChange={(e) => setFocusScore(Number(e.target.value))}
-                    className={styles.focusSlider}
-                />
-                
-                <div className={styles.sliderLabels}>
-                    <span>Distracted</span>
-                    <strong style={{color: '#3b82f6'}}>{focusScore}%</strong>
-                    <span>Deep Flow</span>
-                </div>
-
-                <div className={styles.reflectionActions}>
-                    <button onClick={handleSaveSession} className={styles.saveBtn}>Save Log</button>
-                    <button onClick={resetState} className={styles.discardBtn}>Discard</button>
-                </div>
-            </div>
+            <button className={`${styles.stopBtn} ${styles.btnPulseHover}`} onClick={handleStopSession}>
+              <Square size={20} fill="currentColor" />
+              Stop Focus
+            </button>
           )}
-        </main>
+        </div>
 
-        {/* RIGHT COLUMN: DYNAMIC RESOURCES */}
-        <aside className={styles.resourcesPanel}>
-          <h3>Session Resources</h3>
+        {/* RIGHT PANEL: RESOURCES & NOTES */}
+        <div className={`${styles.resourcesPanel} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.2s' }}>
+          
+          <h3 className={styles.panelTitle}>Session Resources</h3>
           <div className={styles.resourceList}>
-            {resources.map((resource) => (
-              <div 
-                key={resource.id} 
-                className={styles.resourceCard}
-                onClick={resource.action}
-              >
-                {resource.icon}
-                <div>
-                  <h4>{resource.title}</h4>
-                  <span className={styles.tag}>{resource.tag}</span>
-                </div>
+            <div className={`${styles.resourceCard} ${styles.btnPulseHover}`} onClick={() => navigate('/library')}>
+              <BookOpen size={20} color="#3b82f6" />
+              <div>
+                <h4>Review Syllabus & Notes</h4>
+                <span className={styles.resourceTag}>Read</span>
               </div>
-            ))}
+            </div>
+            
+            <div className={`${styles.resourceCard} ${styles.btnPulseHover}`} onClick={handleNavigateToPractice}>
+              <Code size={20} color="#8b5cf6" />
+              <div>
+                <h4>Generate Practice Set</h4>
+                <span className={styles.resourceTag}>Code</span>
+              </div>
+            </div>
           </div>
 
-          <div className={styles.notesArea}>
-             <h3>Quick Notes</h3>
-             <textarea placeholder="Type your key takeaways here..." className={styles.notesInput}></textarea>
+          <h3 className={styles.panelTitle} style={{marginTop: '30px'}}>Quick Notes</h3>
+          <div className={styles.notesWrapper}>
+            <textarea 
+              className={styles.notesArea}
+              placeholder="Type your key takeaways here..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+            <Edit3 size={16} className={styles.notesIcon} />
           </div>
-        </aside>
 
+        </div>
       </div>
     </div>
   );

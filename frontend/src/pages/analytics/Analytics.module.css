@@ -35,12 +35,13 @@
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  transition: transform 0.2s;
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .metricCard:hover {
   transform: translateY(-4px);
   border-color: var(--primary);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
 }
 
 .cardIcon {
@@ -107,6 +108,12 @@
   padding: 4px 8px;
   border-radius: 6px;
   outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.chartHeader select:hover {
+  border-color: var(--primary);
 }
 
 /* GRAPH BAR VISUALIZATION */
@@ -133,7 +140,7 @@
   background-color: var(--secondary);
   border-radius: 4px 4px 0 0;
   opacity: 0.7;
-  transition: height 0.5s ease;
+  transition: opacity 0.3s ease, width 0.3s ease;
 }
 
 .bar:hover {
@@ -204,4 +211,36 @@
 @media (max-width: 900px) {
   .metricsGrid { grid-template-columns: 1fr; }
   .chartsRow { grid-template-columns: 1fr; }
+}
+
+/* --- GLOBAL ANIMATIONS --- */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Specific keyframe for bars growing from the bottom */
+@keyframes growUp {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+.animateFadeInUp {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.animateGrow {
+  transform-origin: bottom; /* Ensures they grow upward, not from the center */
+  animation: growUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform: scaleY(0); /* Hide before animation */
+}
+
+.btnPulseHover {
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+}
+
+.btnPulseHover:hover {
+  transform: scale(1.03);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }

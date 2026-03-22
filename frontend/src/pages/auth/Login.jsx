@@ -7,7 +7,8 @@ import {
   ArrowRight, 
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Loader2
 } from 'lucide-react';
 import styles from './Auth.module.css';
 
@@ -36,6 +37,11 @@ const Login = () => {
 
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
+      
+      // Save userName globally so Settings & Insights can use it
+      if (res.data.user?.name) {
+          localStorage.setItem('userName', res.data.user.name);
+      }
 
       navigate('/dashboard');
     } catch (err) {
@@ -52,7 +58,7 @@ const Login = () => {
   return (
     <div className={styles.authContainer}>
       
-      {/* LEFT SIDE */}
+      {/* LEFT SIDE: Branding */}
       <div className={styles.brandSection}>
         <div className={styles.circle1}></div>
         <div className={styles.circle2}></div>
@@ -79,7 +85,7 @@ const Login = () => {
         </div>
       </div>
 
-      {/* RIGHT SIDE */}
+      {/* RIGHT SIDE: Form */}
       <div className={styles.formSection}>
         <div className={styles.formWrapper}>
           
@@ -89,17 +95,7 @@ const Login = () => {
           </div>
 
           {error && (
-            <div style={{
-              background: 'rgba(239, 68, 68, 0.1)', 
-              color: '#ef4444', 
-              padding: '10px', 
-              borderRadius: '8px',
-              marginBottom: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '0.9rem'
-            }}>
+            <div className={styles.errorBox}>
               <AlertCircle size={16} /> {error}
             </div>
           )}
@@ -141,9 +137,11 @@ const Login = () => {
               </button>
             </div>
 
+            {/* THE FIX: Flexbox Options Row */}
             <div className={styles.options}>
               <label className={styles.checkbox}>
-                <input type="checkbox" /> Remember me
+                <input type="checkbox" /> 
+                <span>Remember me</span>
               </label>
               <a href="#" className={styles.forgotLink}>Forgot Password?</a>
             </div>
@@ -153,8 +151,11 @@ const Login = () => {
               className={styles.submitBtn} 
               disabled={loading}
             >
-              {loading ? "Signing in..." : "Sign in"} 
-              <ArrowRight size={20} />
+              {loading ? (
+                <Loader2 className={styles.spin} size={20} />
+              ) : (
+                <>Sign in <ArrowRight size={20} /></>
+              )}
             </button>
           </form>
 
