@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, FileText, Sliders, Timer, Sparkles } from 'lucide-react';
+import { UploadCloud, FileText, Sliders, Timer, Sparkles, Folder } from 'lucide-react';
+import axios from 'axios';
 import styles from './practise_lab.module.css';
 
 const TOPICS_KEY = 'practiceTopics';
@@ -9,6 +10,13 @@ const SETTINGS_KEY = 'practiceSettings';
 
 const Assessment = () => {
   const navigate = useNavigate();
+  
+  // --- SUBJECT GATE STATE ---
+  const [subjects, setSubjects] = useState([]);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
+
+  // --- ORIGINAL STATE ---
   const [uploadedFile, setUploadedFile] = useState(null);
   const [textInput, setTextInput] = useState('');
   const [selectedTopics, setSelectedTopics] = useState([]);
@@ -31,6 +39,24 @@ const Assessment = () => {
 
   const difficulties = ['Easy', 'Medium', 'Hard', 'Exam Level'];
 
+  // 1. Fetch Subjects on Mount
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('http://localhost:5000/api/syllabus/list', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setSubjects(res.data);
+      } catch (err) {
+        console.error("Failed to load subjects");
+      } finally {
+        setLoadingSubjects(false);
+      }
+    };
+    fetchSubjects();
+  }, []);
+
   useEffect(() => {
     const storedSelected = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
     setSelectedTopics(Array.isArray(storedSelected) ? storedSelected : []);
@@ -45,6 +71,11 @@ const Assessment = () => {
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [activeMode, difficulty, questionCount, timerEnabled]);
+
+  const handleSelectSubject = (subject) => {
+    setSelectedSubject(subject);
+    localStorage.setItem('practiceSubject', subject.course_title);
+  };
 
   const handleDrop = (event) => {
     event.preventDefault();
@@ -153,6 +184,45 @@ const Assessment = () => {
     handleSaveFile(fileTitle);
   };
 
+  // --- STEP 0: SUBJECT SELECTION GATE ---
+  if (!selectedSubject) {
+    return (
+      <div className={styles.labContainer}>
+        <header className={styles.header}>
+          <div>
+            <span className={styles.badge}>Practice Lab</span>
+            <h2>Select a Subject</h2>
+            <p className={styles.subText}>Which library folder are we generating practice material for?</p>
+          </div>
+        </header>
+        
+        {loadingSubjects ? <p style={{color: '#94a3b8'}}>Loading your subjects...</p> : (
+          <div className={styles.splitGrid}>
+            {subjects.length === 0 ? (
+               <div className={styles.sectionCard}>
+                 <p style={{color: '#94a3b8'}}>No subjects found. Upload a syllabus from the Dashboard first.</p>
+               </div>
+            ) : (
+              subjects.map(sub => (
+                <div 
+                  key={sub.id} 
+                  className={styles.sectionCard} 
+                  onClick={() => handleSelectSubject(sub)} 
+                  style={{cursor: 'pointer', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '15px', padding: '20px', transition: 'border-color 0.2s'}}
+                  onMouseOver={(e) => e.currentTarget.style.borderColor = '#38bdf8'}
+                  onMouseOut={(e) => e.currentTarget.style.borderColor = '#334155'}
+                >
+                  <Folder size={32} color="#38bdf8" />
+                  <h3 style={{margin: 0, fontSize: '1.1rem'}}>{sub.course_title}</h3>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const hasInput = Boolean(uploadedFile) || Boolean(textInput.trim());
   const canExtract = hasInput && !isExtracting;
   const modeStep = 2;
@@ -162,7 +232,7 @@ const Assessment = () => {
     <div className={styles.labContainer}>
       <header className={styles.header}>
         <div>
-          <span className={styles.badge}>Practice Lab</span>
+          <span className={styles.badge}>Subject: {selectedSubject.course_title}</span>
           <h2>Build your practice set in minutes</h2>
           <p className={styles.subText}>Upload syllabus or notes, pick topics, then generate the format you want.</p>
         </div>
