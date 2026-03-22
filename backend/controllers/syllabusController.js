@@ -47,17 +47,24 @@ exports.uploadSyllabus = async (req, res) => {
         const syllabusJson = JSON.parse(text);
 
         const userId = req.user.id; 
+        const courseTitle = syllabusJson.courseTitle || "Untitled Course";
 
-        // Store as JSON string in DB
+        // 1. Store as JSON string in DB
         const [resultDb] = await db.execute(
             'INSERT INTO syllabuses (user_id, course_title, structure) VALUES (?, ?, ?)',
-            [userId, syllabusJson.courseTitle || "Untitled Course", JSON.stringify(syllabusJson)]
+            [userId, courseTitle, JSON.stringify(syllabusJson)]
         );
 
-        console.log("✅ Syllabus Saved! Database ID:", resultDb.insertId);
+        // 2. [NEW] Auto-Create Library Folder for this Subject
+        await db.execute(
+            'INSERT INTO library_items (user_id, title, type, category) VALUES (?, ?, ?, ?)',
+            [userId, courseTitle, 'folder', 'uploaded']
+        );
+
+        console.log("✅ Syllabus Saved & Folder Created! Database ID:", resultDb.insertId);
 
         res.status(201).json({ 
-            message: "Syllabus processed successfully", 
+            message: "Syllabus processed and Library folder created successfully", 
             syllabusId: resultDb.insertId,
             data: syllabusJson 
         });
@@ -149,10 +156,7 @@ exports.getCareerInsights = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Fetch the goal
         const [goals] = await db.execute('SELECT target_role FROM career_goals WHERE user_id = ?', [userId]);
-        
-        // Fetch the recommendations
         const [recs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ?', [userId]);
 
         res.status(200).json({
@@ -175,7 +179,6 @@ exports.generateCareerInsights = async (req, res) => {
             return res.status(400).json({ message: "Please provide a target career role." });
         }
 
-        // 1. Fetch ALL academic syllabuses for this user
         const [rows] = await db.execute(
             'SELECT course_title, structure FROM syllabuses WHERE user_id = ?',
             [userId]
@@ -185,7 +188,6 @@ exports.generateCareerInsights = async (req, res) => {
             return res.status(404).json({ message: "No syllabuses found. Please upload at least one syllabus first." });
         }
 
-        // 2. Stitch them all together into a "Knowledge Portfolio"
         const combinedCurriculum = rows.map(row => {
             let parsedStructure = row.structure;
             if (typeof parsedStructure === 'string') {
@@ -197,7 +199,6 @@ exports.generateCareerInsights = async (req, res) => {
             };
         });
 
-        // 3. The Prompt: Now evaluating the COMBINED knowledge
         const prompt = `
         System: You are an elite tech industry career advisor.
         Task: Analyze the following COMBINED academic curriculum (which represents everything this student has learned across multiple university subjects). 
@@ -220,17 +221,14 @@ exports.generateCareerInsights = async (req, res) => {
         }
         `;
 
-        // 4. Ask Gemini
         console.log(`🧠 InsightED: Aggregating ${rows.length} subjects to find gaps for ${targetRole}...`);
         const result = await model.generateContent(prompt);
         const response = await result.response;
         let text = response.text();
 
-        // 5. Clean & Parse JSON
         text = text.replace(/```json/g, "").replace(/```/g, "").trim();
         const careerJson = JSON.parse(text);
 
-        // 6. Save Target Role to \`career_goals\` table
         await db.execute(
             `INSERT INTO career_goals (user_id, target_role) 
              VALUES (?, ?) 
@@ -238,7 +236,6 @@ exports.generateCareerInsights = async (req, res) => {
             [userId, targetRole, targetRole]
         );
 
-        // 7. Save Skills to \`roadmap_recommendations\` table
         await db.execute('DELETE FROM roadmap_recommendations WHERE user_id = ?', [userId]);
 
         for (const skill of careerJson.missingSkills) {
@@ -249,12 +246,11 @@ exports.generateCareerInsights = async (req, res) => {
             );
         }
 
-        // 8. Fetch the newly inserted records to get their Database IDs!
         const [newRecs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ?', [userId]);
 
         res.status(200).json({ 
             message: "Holistic career insights generated successfully",
-            recommendations: newRecs // Send back the actual database rows, not just the AI text
+            recommendations: newRecs 
         });
 
     } catch (error) {

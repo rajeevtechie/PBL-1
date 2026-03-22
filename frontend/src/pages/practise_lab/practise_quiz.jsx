@@ -1,7 +1,8 @@
 // frontend/src/pages/practise_lab/practise_quiz.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Timer } from 'lucide-react'; // Added Timer Icon
+import { Timer, Square, CheckCircle, Clock } from 'lucide-react'; 
+import axios from 'axios';
 import styles from './practise_lab.module.css';
 
 const RESULTS_KEY = 'practiceQuizResults';
@@ -37,6 +38,13 @@ const PractiseQuiz = () => {
   const [contentTitleError, setContentTitleError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
 
+  // --- EMBEDDED FOCUS TIMER STATE ---
+  const [targetMinutes, setTargetMinutes] = useState(25);
+  const [remainingSeconds, setRemainingSeconds] = useState(25 * 60);
+  const [isFocusActive, setIsFocusActive] = useState(false);
+  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [studiedSeconds, setStudiedSeconds] = useState(0);
+
   const modeMap = {
     'Quiz (MCQ)': 'quiz',
     'Short Answer': 'short',
@@ -53,6 +61,114 @@ const PractiseQuiz = () => {
     const storedQuery = localStorage.getItem(AI_QUERY_KEY) || '';
     setAiQuery(storedQuery);
   }, []);
+
+  // AUTO-START TIMER
+  useEffect(() => {
+    if (items.length > 0 && !isFocusActive && studiedSeconds === 0 && !sessionStartTime) {
+      setIsFocusActive(true);
+      setSessionStartTime(new Date().toISOString());
+      localStorage.setItem('quizFocusEndTime', (Date.now() + targetMinutes * 60000).toString());
+    }
+  }, [items, isFocusActive, studiedSeconds, sessionStartTime, targetMinutes]);
+
+  // Keep Timer Ticking
+  useEffect(() => {
+    let interval;
+    if (isFocusActive) {
+      const storedEndTime = parseInt(localStorage.getItem('quizFocusEndTime'), 10);
+      interval = setInterval(() => {
+        const diff = Math.round((storedEndTime - Date.now()) / 1000);
+        if (diff <= 0) {
+          clearInterval(interval);
+          setRemainingSeconds(0);
+          handleStopFocus(targetMinutes * 60);
+        } else {
+          setRemainingSeconds(diff);
+        }
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isFocusActive, targetMinutes]);
+
+  // --- DYNAMIC TIME EDITING LOGIC ---
+  const handleTimeChange = (e) => {
+    let val = e.target.value;
+    
+    // Allow empty state while typing
+    if (val === '') {
+      setTargetMinutes('');
+      return;
+    }
+
+    const mins = Number(val);
+    if (mins < 1 || isNaN(mins)) return; // Prevent negative or invalid numbers
+    
+    setTargetMinutes(mins);
+
+    // If timer is already running, dynamically push the expected end time further out
+    if (isFocusActive && sessionStartTime) {
+      const newEndTime = new Date(sessionStartTime).getTime() + (mins * 60000);
+      localStorage.setItem('quizFocusEndTime', newEndTime.toString());
+      
+      const diff = Math.round((newEndTime - Date.now()) / 1000);
+      setRemainingSeconds(diff > 0 ? diff : 0);
+    } else {
+      setRemainingSeconds(mins * 60);
+    }
+  };
+
+  const handleTimeBlur = () => {
+    // Failsafe: if they click away and left it empty, reset to 25
+    if (!targetMinutes || targetMinutes < 1) {
+      setTargetMinutes(25);
+      if (isFocusActive && sessionStartTime) {
+        const newEndTime = new Date(sessionStartTime).getTime() + (25 * 60000);
+        localStorage.setItem('quizFocusEndTime', newEndTime.toString());
+      } else {
+        setRemainingSeconds(25 * 60);
+      }
+    }
+  };
+
+  const handleStopFocus = async (secondsOverride) => {
+    setIsFocusActive(false);
+    
+    // Fallback safely if targetMinutes is empty string
+    const safeTargetMins = Number(targetMinutes) || 25;
+    const actualSeconds = secondsOverride !== undefined ? secondsOverride : (safeTargetMins * 60) - remainingSeconds;
+    
+    setStudiedSeconds(actualSeconds);
+    localStorage.removeItem('quizFocusEndTime');
+
+    const durationMinutes = Math.floor(actualSeconds / 60);
+    
+    if (durationMinutes >= 1) {
+      try {
+        const token = localStorage.getItem('token');
+        const subjectName = localStorage.getItem('practiceSubject') || 'Practice Review';
+        
+        await axios.post('http://localhost:5000/api/practice/log-session', {
+          subjectName: subjectName,
+          startTime: sessionStartTime,
+          endTime: new Date().toISOString(),
+          durationMinutes: durationMinutes,
+          focusScore: 85 
+        }, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        setSaveSuccess(`Session Completed! ${durationMinutes} minutes recorded to Analytics.`);
+        setTimeout(() => setSaveSuccess(''), 5000);
+
+      } catch (err) {
+        console.error("Failed to auto-log session", err);
+        setSaveError("Session finished, but failed to sync to Dashboard.");
+      }
+    } else {
+      setSaveError("Session too short to record (Under 1 minute).");
+      setTimeout(() => setSaveError(''), 5000);
+    }
+  };
 
   const handleGenerateMore = async () => {
     setGenerateError('');
@@ -113,13 +229,17 @@ const PractiseQuiz = () => {
       }
 
       const nextItems = Array.isArray(data.data) ? data.data : [];
-      const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
       const storedResults = {
         mode: settings.mode || '',
         items: nextItems
       };
       localStorage.setItem(RESULTS_KEY, JSON.stringify(storedResults));
       setItems(nextItems);
+
+      setStudiedSeconds(0);
+      setSessionStartTime(null);
+      setIsFocusActive(false);
+
     } catch (error) {
       setGenerateError(error.message);
     } finally {
@@ -148,10 +268,12 @@ const PractiseQuiz = () => {
     try {
       const token = localStorage.getItem('token');
       const selectedTopics = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
+      const subjectName = localStorage.getItem('practiceSubject') || 'General';
 
       const payload = {
         title: titleValue.trim(),
         type: selectedMode,
+        category: subjectName, 
         content: {
           items,
           meta: {
@@ -265,25 +387,63 @@ const PractiseQuiz = () => {
     );
   };
 
+  const formatTime = (totalSeconds) => {
+    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+    const s = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
   const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
   const modeLabel = settings.mode || 'Practice';
 
   return (
     <div className={styles.quizContainer}>
-      <header className={styles.quizHeader}>
+      
+      <header className={styles.quizHeader} style={{ alignItems: 'center', background: '#1e293b', padding: '20px', borderRadius: '16px', border: isFocusActive ? '1px solid #10b981' : '1px solid #334155' }}>
         <div>
-          <span className={styles.badge}>Practice Lab</span>
+          <span className={styles.badge} style={{ color: isFocusActive ? '#10b981' : '#3b82f6' }}>
+            {isFocusActive ? 'Focus Engine Active' : 'Practice Lab'}
+          </span>
           <h2 className={styles.quizTitle}>{modeLabel}</h2>
-          <p className={styles.quizSub}>Review each question and explanation.</p>
         </div>
-        <div className={styles.topicOnlyActions}>
-          <button className={styles.secondaryAction} onClick={() => navigate('/practice-topics')}>
-            Back
-          </button>
-          <button className={styles.finalAction} onClick={() => navigate('/assessment')}>
-            New Practice
-          </button>
-        </div>
+        
+        {items.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            
+            {/* NEW: DYNAMIC TIME INPUT */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(15, 23, 42, 0.4)', padding: '6px 12px', borderRadius: '8px', border: '1px solid #334155' }}>
+              <Clock size={16} color="#94a3b8" />
+              <input 
+                type="number" 
+                value={targetMinutes} 
+                onChange={handleTimeChange}
+                onBlur={handleTimeBlur}
+                style={{ 
+                  width: '40px', 
+                  background: 'transparent', 
+                  border: 'none', 
+                  color: '#fff', 
+                  fontSize: '1rem', 
+                  fontWeight: 'bold', 
+                  textAlign: 'center', 
+                  outline: 'none',
+                  fontVariantNumeric: 'tabular-nums'
+                }}
+              />
+              <span style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '600' }}>min</span>
+            </div>
+
+            <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: isFocusActive ? '#10b981' : '#f8fafc', fontVariantNumeric: 'tabular-nums', minWidth: '100px', textAlign: 'center', letterSpacing: '1px' }}>
+              {formatTime(remainingSeconds)}
+            </div>
+
+            {isFocusActive && (
+              <button onClick={() => handleStopFocus()} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(239, 68, 68, 0.2)' }}>
+                <Square size={16} fill="white"/> Stop Focus
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       {items.length === 0 ? (
@@ -309,8 +469,8 @@ const PractiseQuiz = () => {
         </section>
       )}
 
-      {/* --- UPDATED ACTION ROW WITH FOCUS JUMP --- */}
-      <div className={styles.quizActionRow}>
+      {/* --- ACTION ROW --- */}
+      <div className={styles.quizActionRow} style={{ alignItems: 'center' }}>
         {modeMap[settings.mode] === 'ai' && (
           <input
             className={styles.textArea}
@@ -324,6 +484,7 @@ const PractiseQuiz = () => {
             style={{ flex: 1, minHeight: '44px' }}
           />
         )}
+        
         <button
           className={styles.finalAction}
           onClick={handleGenerateMore}
@@ -332,25 +493,23 @@ const PractiseQuiz = () => {
           {isGenerating ? 'Generating...' : 'Generate'}
         </button>
 
-        {/* This button seamlessly connects Practice Lab -> Focus Mode */}
-        <button
-          className={styles.secondaryAction}
-          onClick={() => navigate('/study')}
-          style={{ marginLeft: 'auto', background: '#3b82f6', color: 'white', border: 'none' }}
-        >
-          <Timer size={18} style={{ marginRight: '8px' }}/> 
-          Start Focus Session
-        </button>
-
-        {generateError && (
-          <div className={styles.generateError}>{generateError}</div>
+        {/* --- MARK AS COMPLETED BUTTON --- */}
+        {isFocusActive && (
+          <button
+            className={styles.secondaryAction}
+            onClick={() => handleStopFocus()}
+            style={{ marginLeft: 'auto', background: '#10b981', color: '#0f172a', border: 'none', display: 'flex', alignItems: 'center', fontWeight: 'bold', gap: '6px' }}
+          >
+            <CheckCircle size={18} /> 
+            Mark as Completed
+          </button>
         )}
-        {saveError && (
-          <div className={styles.generateError}>{saveError}</div>
-        )}
-        {saveSuccess && (
-          <div className={styles.successMessage}>{saveSuccess}</div>
-        )}
+      </div>
+      
+      <div style={{ marginTop: '10px' }}>
+        {generateError && <div className={styles.generateError}>{generateError}</div>}
+        {saveError && <div className={styles.generateError} style={{color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)'}}>{saveError}</div>}
+        {saveSuccess && <div className={styles.successMessage} style={{color: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '10px', borderRadius: '8px'}}>{saveSuccess}</div>}
       </div>
 
       {isSaveModalOpen && (
@@ -371,17 +530,10 @@ const PractiseQuiz = () => {
               <div className={styles.modalError}>{contentTitleError}</div>
             )}
             <div className={styles.modalActions}>
-              <button
-                className={styles.secondaryAction}
-                onClick={() => setIsSaveModalOpen(false)}
-              >
+              <button className={styles.secondaryAction} onClick={() => setIsSaveModalOpen(false)}>
                 Cancel
               </button>
-              <button
-                className={styles.finalAction}
-                onClick={submitContentTitle}
-                disabled={isSaving}
-              >
+              <button className={styles.finalAction} onClick={submitContentTitle} disabled={isSaving}>
                 {isSaving ? 'Saving...' : 'Save'}
               </button>
             </div>
