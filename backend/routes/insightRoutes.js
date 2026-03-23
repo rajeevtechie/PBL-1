@@ -4,7 +4,10 @@ const router = express.Router();
 const insightController = require('../controllers/insightController');
 const authMiddleware = require('../middleware/authMiddleware');
 
-// Get the main dashboard analytics
+// 1. Get the main dashboard analytics
 router.get('/dashboard', authMiddleware, insightController.getDashboardAnalytics);
+
+// 2. AI Mentor Chat (The new route we just added!)
+router.post('/chat', authMiddleware, insightController.chatWithMentor);
 
 module.exports = router;
