@@ -59,7 +59,7 @@ const PracticeLab = () => {
             headers: { Authorization: `Bearer ${token}` }
           });
           setSubjects(res.data);
-        } catch (err) {
+        } catch  {
           console.error("Failed to load subjects");
         } finally {
           setLoadingSubjects(false);

@@ -70,7 +70,7 @@ const Library = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchLibraryItems(); // Refresh
-    } catch (err) {
+    } catch {
       alert("Failed to delete item.");
     }
   };
