@@ -1,5 +1,5 @@
 // backend/controllers/practiceController.js
-const db = require("../config/db"); // Your promisePool from db.js
+const db = require("../config/db"); 
 const { generateJson } = require("../services/geminiService");
 const { buildGeneratePrompt } = require("../utils/promptBuilder");
 
@@ -70,15 +70,19 @@ exports.generatePractice = async (req, res, next) => {
     if (mode !== "ai" && (!difficulty || !allowedDifficulties.has(difficulty))) {
       return res.status(400).json({ success: false, message: "Invalid difficulty." });
     }
-    if (mode !== "ai" && (!numQuestions || Number(numQuestions) < 1)) {
+    
+    // Safely parse the target count requested by the frontend
+    const targetCount = Number(numQuestions) || 5;
+
+    if (mode !== "ai" && targetCount < 1) {
       return res.status(400).json({ success: false, message: "numQuestions must be greater than 0." });
     }
 
-    const prompt = buildGeneratePrompt({
+    let prompt = buildGeneratePrompt({
       mode,
       topic: topic?.trim(),
       difficulty,
-      numQuestions: Number(numQuestions),
+      numQuestions: targetCount,
       content,
       userQuery,
     });
@@ -87,8 +91,18 @@ exports.generatePractice = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Unable to build prompt." });
     }
 
+    // 🛡️ LAYER 1: AI Prompt Injection
+    // Force the AI to acknowledge the exact count limits
+    prompt += `\n\nCRITICAL INSTRUCTION: You MUST generate EXACTLY ${targetCount} items/questions. Do not fall back to defaults like 10 or 15. Generate exactly ${targetCount}.`;
+
     const data = await generateJson({ prompt, retries: 1 });
-    const normalized = normalizeByMode(mode, data);
+    let normalized = normalizeByMode(mode, data);
+
+    // 🛡️ LAYER 2: The Array Slicer (Bulletproof Fix)
+    // If the AI hallucinates and returns 15 anyway, we slice off the excess before sending to frontend!
+    if (normalized.length > targetCount) {
+        normalized = normalized.slice(0, targetCount);
+    }
 
     if (!normalized.length) {
       return res.status(422).json({
