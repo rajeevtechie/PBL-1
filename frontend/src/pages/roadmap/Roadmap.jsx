@@ -2,14 +2,17 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { 
   BookOpen, Briefcase, CheckCircle, Circle, Lock, 
-  AlertTriangle, Loader2, ChevronRight, Sparkles, Edit2, GraduationCap
+  AlertTriangle, Loader2, ChevronRight, Sparkles, Edit2, GraduationCap, ChevronDown
 } from 'lucide-react';
 import styles from './Roadmap.module.css';
 
 const Roadmap = () => {
   const [roadmap, setRoadmap] = useState(null);
   const [careerData, setCareerData] = useState(null); 
+  const [subjectList, setSubjectList] = useState([]); 
   
+  const [activeId, setActiveId] = useState(localStorage.getItem('activeSyllabusId') || 'latest');
+
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false); 
   const [targetRole, setTargetRole] = useState("");  
@@ -24,7 +27,23 @@ const Roadmap = () => {
   };
 
   useEffect(() => {
+    const fetchSubjectList = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get('http://localhost:5000/api/syllabus/list', { headers: { Authorization: `Bearer ${token}` } });
+            setSubjectList(res.data);
+        } catch (err) {
+            console.error("Failed to load subject list", err);
+        }
+    };
+    fetchSubjectList();
+  }, []);
+
+  useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
+      setError('');
+      
       try {
         const token = localStorage.getItem('token');
         if (!token) {
@@ -32,26 +51,33 @@ const Roadmap = () => {
             setLoading(false); return;
         }
 
-        const activeId = localStorage.getItem('activeSyllabusId');
-        const endpoint = activeId 
-            ? `http://localhost:5000/api/syllabus/${activeId}` 
-            : 'http://localhost:5000/api/syllabus/latest';
+        const endpoint = activeId === 'latest' 
+            ? `http://localhost:5000/api/syllabus/latest` 
+            : `http://localhost:5000/api/syllabus/${activeId}`;
 
-        const resSyllabus = await axios.get(endpoint, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const resSyllabus = await axios.get(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
         setRoadmap(resSyllabus.data);
 
+        if (activeId === 'latest' && resSyllabus.data.id) {
+            setActiveId(resSyllabus.data.id.toString());
+            localStorage.setItem('activeSyllabusId', resSyllabus.data.id.toString());
+        }
+
         try {
-            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career/insights`, {
+            const syllabusIdQuery = resSyllabus.data.id || activeId;
+            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
             setCareerData(resCareer.data);
             if (resCareer.data.targetRole) {
                 setTargetRole(resCareer.data.targetRole);
+            } else {
+                setTargetRole(""); 
             }
         } catch {
+            setCareerData(null);
+            setTargetRole("");
             console.log("No career data yet for this specific context.");
         }
 
@@ -62,7 +88,7 @@ const Roadmap = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [activeId]);
 
   const handleAnalyzeGaps = async () => {
     if (!targetRole.trim()) {
@@ -72,22 +98,17 @@ const Roadmap = () => {
     setAnalyzing(true);
     try {
         const token = localStorage.getItem('token');
-        const activeId = roadmap?.id || localStorage.getItem('activeSyllabusId') || 'latest';
+        const currentId = roadmap?.id || activeId; 
         
-        const response = await axios.post(`http://localhost:5000/api/syllabus/career/generate`, 
-            { targetRole: targetRole, isGlobal: isGlobal, syllabusId: activeId },
+        const response = await axios.post(`http://localhost:5000/api/syllabus/${currentId}/analyze`, 
+            { targetRole: targetRole, isGlobal: isGlobal, syllabusId: currentId },
             { headers: { 'Authorization': `Bearer ${token}` }}
         );
         
-        setCareerData({
-            targetRole: targetRole,
-            recommendations: response.data.recommendations
-        });
+        setCareerData({ targetRole: targetRole, recommendations: response.data.recommendations });
         setIsEditingGoal(false);
-
     } catch (err) {
         console.error("Analysis Error:", err);
-        // ✅ Tell the user exactly what went wrong from the backend!
         const serverMessage = err.response?.data?.message;
         alert(serverMessage ? serverMessage : "Failed to analyze gaps. Please try again.");
     } finally {
@@ -95,45 +116,27 @@ const Roadmap = () => {
     }
   };
 
-  const academicProgress = roadmap?.units?.length 
-    ? Math.round((roadmap.units.filter(u => u.is_completed || u.completed || u.is_completed === 1).length / roadmap.units.length) * 100) 
-    : 0;
-
-  const careerProgress = careerData?.recommendations?.length 
-    ? Math.round((careerData.recommendations.filter(r => r.is_completed || r.is_completed === 1).length / careerData.recommendations.length) * 100) 
-    : 0;
-
   const handleToggleAcademicUnit = async (unitIndex) => {
     const currentStatus = roadmap.units[unitIndex].is_completed || roadmap.units[unitIndex].completed || false;
     const newStatus = !currentStatus;
 
     const updatedUnits = [...roadmap.units];
-    updatedUnits[unitIndex] = { 
-        ...updatedUnits[unitIndex], 
-        is_completed: newStatus, 
-        completed: newStatus 
-    };
+    updatedUnits[unitIndex] = { ...updatedUnits[unitIndex], is_completed: newStatus, completed: newStatus };
     const updatedRoadmap = { ...roadmap, units: updatedUnits };
     setRoadmap(updatedRoadmap);
 
     try {
         const token = localStorage.getItem('token');
-        const activeId = roadmap.id || localStorage.getItem('activeSyllabusId') || 'latest';
-        
-        await axios.post(`http://localhost:5000/api/syllabus/${activeId}/unit/toggle`, 
-            { unitIndex: unitIndex, isCompleted: newStatus },
+        const currentId = roadmap?.id || activeId;
+        await axios.put(`http://localhost:5000/api/syllabus/${currentId}/structure`, 
+            { structure: updatedRoadmap },
             { headers: { 'Authorization': `Bearer ${token}` }}
         );
     } catch (err) {
         console.error("Failed to update academic progress", err);
         alert("Failed to save progress. Reverting change.");
-        
         const revertedUnits = [...roadmap.units];
-        revertedUnits[unitIndex] = { 
-            ...revertedUnits[unitIndex], 
-            is_completed: currentStatus, 
-            completed: currentStatus 
-        };
+        revertedUnits[unitIndex] = { ...revertedUnits[unitIndex], is_completed: currentStatus, completed: currentStatus };
         setRoadmap({ ...roadmap, units: revertedUnits });
     }
   };
@@ -144,10 +147,7 @@ const Roadmap = () => {
         const newStatus = !currentStatus;
 
         setCareerData(prev => ({
-            ...prev,
-            recommendations: prev.recommendations.map(rec => 
-                rec.id === recId ? { ...rec, is_completed: newStatus } : rec
-            )
+            ...prev, recommendations: prev.recommendations.map(rec => rec.id === recId ? { ...rec, is_completed: newStatus } : rec)
         }));
 
         await axios.patch(`http://localhost:5000/api/syllabus/recommendation/${recId}/toggle`, 
@@ -160,20 +160,50 @@ const Roadmap = () => {
     }
   };
 
-  if (loading) return <div className={styles.centerMsg}><Loader2 className={styles.spinner} size={48}/></div>;
-  if (error) return <div className={styles.centerMsg}><AlertTriangle size={48}/> <p>{error}</p></div>;
+  const academicProgress = roadmap?.units?.length 
+    ? Math.round((roadmap.units.filter(u => u.is_completed || u.completed || u.is_completed === 1).length / roadmap.units.length) * 100) : 0;
+
+  const careerProgress = careerData?.recommendations?.length 
+    ? Math.round((careerData.recommendations.filter(r => r.is_completed === true || r.is_completed === 1).length / careerData.recommendations.length) * 100) : 0;
 
   const isAcademicMode = /academic|exam|examination|university|pass|score|college|grade/i.test(careerData?.targetRole || "");
 
+  if (loading) return <div className={styles.centerMsg}><Loader2 className={styles.spinner} size={48}/></div>;
+  if (error) return <div className={styles.centerMsg}><AlertTriangle size={48}/> <p>{error}</p></div>;
+
   return (
     <div className={styles.roadmapContainer}>
+      
       <header className={styles.header}>
-        <div className={styles.headerContent}>
-            <h1>{roadmap?.courseTitle || "Academic Roadmap"}</h1>
-            <p>
-               <span className={styles.highlight}>Academic Syllabus</span> synced with 
-               <span className={styles.highlight}> Industry Demands</span>.
-            </p>
+        <div className={styles.headerContent} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '20px' }}>
+            <div>
+                <h1>{roadmap?.courseTitle || "Academic Roadmap"}</h1>
+                <p>
+                   <span className={styles.highlight}>Academic Syllabus</span> synced with 
+                   <span className={styles.highlight}> Industry Demands</span>.
+                </p>
+            </div>
+
+            {subjectList.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(30, 41, 59, 0.5)', padding: '8px 12px', borderRadius: '10px', border: '1px solid #334155' }}>
+                    <BookOpen size={16} color="#94a3b8" />
+                    <select 
+                        value={activeId} 
+                        onChange={(e) => {
+                            const newId = e.target.value;
+                            localStorage.setItem('activeSyllabusId', newId);
+                            setActiveId(newId);
+                        }}
+                        style={{ background: 'transparent', color: 'white', border: 'none', outline: 'none', cursor: 'pointer', fontSize: '0.95rem', fontWeight: '500', paddingRight: '5px' }}
+                    >
+                        {subjectList.map(sub => (
+                            <option key={sub.id} value={sub.id} style={{ background: '#1e293b' }}>
+                                {sub.course_title}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
         </div>
       </header>
 
@@ -199,42 +229,35 @@ const Roadmap = () => {
           <div className={styles.timeline}>
             {roadmap?.units?.map((unit, index) => {
               const unitDone = unit.is_completed || unit.completed || unit.is_completed === 1;
+              
+              // Helper to check if unit has <= 3 topics
+              const isShortUnit = !unit.topics || unit.topics.length <= 3;
+              
               return (
               <div key={index} className={`${styles.node} ${unitDone ? styles.completed : (index === 0 || (roadmap.units[index-1]?.is_completed || roadmap.units[index-1]?.completed) ? styles.current : styles.locked)}`}>
                 <div className={styles.line}></div>
-                
                 <div className={styles.marker} style={{ backgroundColor: unitDone ? 'rgba(16, 185, 129, 0.1)' : '', color: unitDone ? '#10b981' : '' }}>
                   {unitDone ? <CheckCircle size={18} /> : (index === 0 || (roadmap.units[index-1]?.is_completed || roadmap.units[index-1]?.completed) ? <Circle size={18} /> : <Lock size={16} />)}
                 </div>
-
                 <div className={styles.content} style={{ opacity: unitDone ? 0.6 : 1, transition: 'opacity 0.3s ease' }}>
                   <div className={styles.unitBadge}>Unit {unit.unitNumber}</div>
                   <h3 style={{ textDecoration: unitDone ? 'line-through' : 'none' }}>{unit.title}</h3>
-                  
                   <ul className={styles.topicList}>
-                      {unit.topics.slice(0, expandedUnits[index] ? unit.topics.length : 3).map((topic, tIdx) => (
+                      {unit.topics?.slice(0, expandedUnits[index] ? unit.topics.length : 3).map((topic, tIdx) => (
                           <li key={tIdx}><ChevronRight size={14} style={{ minWidth: '14px' }} /> {topic}</li>
                       ))}
-                      
-                      {unit.topics.length > 3 && (
+                      {!isShortUnit && (
                           <li className={styles.moreTopics} onClick={() => toggleUnit(index)} style={{ cursor: 'pointer', color: 'var(--primary)', fontWeight: '600', marginTop: '8px' }}>
                             {expandedUnits[index] ? "- Show less topics" : `+ ${unit.topics.length - 3} more topics`}
                           </li>
                       )}
                   </ul>
-
-                  {expandedUnits[index] && (
+                  
+                  {/* ✅ FIXED: Show checkbox if expanded OR if the unit is naturally short! */}
+                  {(expandedUnits[index] || isShortUnit) && (
                       <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <input 
-                              type="checkbox" 
-                              id={`unit-${index}`}
-                              checked={unitDone}
-                              onChange={() => handleToggleAcademicUnit(index)}
-                              style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#10b981' }}
-                          />
-                          <label htmlFor={`unit-${index}`} style={{ cursor: 'pointer', fontSize: '0.85rem', color: unitDone ? '#10b981' : '#cbd5e1', fontWeight: '500' }}>
-                              Mark Unit {unit.unitNumber} as Completed
-                          </label>
+                          <input type="checkbox" id={`unit-${index}`} checked={unitDone} onChange={() => handleToggleAcademicUnit(index)} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#10b981' }} />
+                          <label htmlFor={`unit-${index}`} style={{ cursor: 'pointer', fontSize: '0.85rem', color: unitDone ? '#10b981' : '#cbd5e1', fontWeight: '500' }}>Mark Unit {unit.unitNumber} as Completed</label>
                       </div>
                   )}
                 </div>
@@ -252,7 +275,6 @@ const Roadmap = () => {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <h2>{isAcademicMode ? "Exam Predictor" : "Career Track"}</h2>
-                      
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: isAcademicMode ? '#8b5cf6' : 'var(--secondary)' }}>{careerProgress}%</span>
                           {careerData?.targetRole && (
@@ -263,9 +285,7 @@ const Roadmap = () => {
                       </div>
                   </div>
                   <span className={styles.subLabel}>
-                     {careerData?.targetRole && !isEditingGoal 
-                        ? (isAcademicMode ? "Highest weightage topics" : `Gaps for ${careerData.targetRole}`) 
-                        : "Market Gap Analysis"}
+                     {careerData?.targetRole && !isEditingGoal ? (isAcademicMode ? "Highest weightage topics" : `Gaps for ${careerData.targetRole}`) : "Market Gap Analysis"}
                   </span>
                 </div>
             </div>
@@ -284,7 +304,6 @@ const Roadmap = () => {
                     <div className={styles.content}>
                       <h3>Generate Insights</h3>
                       <p className={styles.aiDescription}>Type a role like <strong>Data Analyst</strong>, or type <strong>"Exam Prep"</strong> to unlock Academic Mode!</p>
-                      
                       <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
                           <input type="text" placeholder="e.g. Software Developer or Exam Prep" value={targetRole} onChange={(e) => setTargetRole(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #334155', background: '#1e293b', color: 'white' }} />
                           <button className={styles.aiBtn} onClick={handleAnalyzeGaps} disabled={analyzing} style={{ opacity: analyzing ? 0.7 : 1 }}>
@@ -292,7 +311,6 @@ const Roadmap = () => {
                               {analyzing ? "Analyzing..." : "Generate"}
                           </button>
                       </div>
-
                       <div style={{ marginTop: '15px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#94a3b8' }}>
                           <input type="checkbox" id="globalToggle" checked={isGlobal} onChange={(e) => setIsGlobal(e.target.checked)} style={{ cursor: 'pointer', accentColor: 'var(--primary)' }} />
                           <label htmlFor="globalToggle" style={{ cursor: 'pointer' }}>Apply this goal to all my subjects (Global)</label>
@@ -305,11 +323,9 @@ const Roadmap = () => {
                       return (
                       <div key={rec.id} className={styles.node}>
                         <div className={styles.line}></div>
-                        
                         <div className={styles.marker} onClick={() => handleToggleComplete(rec.id, recDone)} style={{ cursor: 'pointer', color: recDone ? '#10b981' : (isAcademicMode ? '#8b5cf6' : 'var(--secondary)'), backgroundColor: recDone ? 'rgba(16, 185, 129, 0.1)' : (isAcademicMode ? 'rgba(139, 92, 246, 0.1)' : 'rgba(236, 72, 153, 0.1)'), transition: 'all 0.3s ease', border: recDone ? 'none' : '2px solid transparent' }} >
                             {recDone ? <CheckCircle size={18} /> : (isAcademicMode ? <GraduationCap size={16} /> : <Circle size={16} />)}
                         </div>
-
                         <div className={styles.content} style={{ opacity: recDone ? 0.6 : 1, transition: 'opacity 0.3s ease' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                               <span style={{ fontSize: '0.8rem', color: isAcademicMode ? '#8b5cf6' : 'var(--secondary)', textTransform: 'uppercase', fontWeight: 'bold' }}>{rec.category}</span>
@@ -319,18 +335,9 @@ const Roadmap = () => {
                           <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '8px' }}>
                               {recDone ? "Completed! Great job." : (isAcademicMode ? "Highly likely to appear on your exam." : `Industry requirement for ${careerData.targetRole}.`)}
                           </p>
-
                           <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <input 
-                                  type="checkbox" 
-                                  id={`rec-${rec.id}`}
-                                  checked={recDone}
-                                  onChange={() => handleToggleComplete(rec.id, recDone)}
-                                  style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: isAcademicMode ? '#8b5cf6' : '#10b981' }}
-                              />
-                              <label htmlFor={`rec-${rec.id}`} style={{ cursor: 'pointer', fontSize: '0.85rem', color: recDone ? (isAcademicMode ? '#8b5cf6' : '#10b981') : '#cbd5e1', fontWeight: '500' }}>
-                                  Mark as Completed
-                              </label>
+                              <input type="checkbox" id={`rec-${rec.id}`} checked={recDone} onChange={() => handleToggleComplete(rec.id, recDone)} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: isAcademicMode ? '#8b5cf6' : '#10b981' }} />
+                              <label htmlFor={`rec-${rec.id}`} style={{ cursor: 'pointer', fontSize: '0.85rem', color: recDone ? (isAcademicMode ? '#8b5cf6' : '#10b981') : '#cbd5e1', fontWeight: '500' }}>Mark as Completed</label>
                           </div>
                         </div>
                       </div>
