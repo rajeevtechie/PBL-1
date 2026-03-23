@@ -12,7 +12,8 @@ const Settings = () => {
     fullName: '',
     university: '',
     major: '',
-    bio: ''
+    bio: '',
+    avatarTrigger: Date.now() // Used to force re-render when image updates
   });
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState(false);
@@ -32,12 +33,13 @@ const Settings = () => {
 
   // --- FETCH DATA ON MOUNT ---
   useEffect(() => {
-    setProfileData({
+    setProfileData(prev => ({
+      ...prev,
       fullName: localStorage.getItem('userName') || 'Rajeev Gupta',
       university: localStorage.getItem('userUniversity') || 'SIT Pune',
       major: localStorage.getItem('userMajor') || 'Computer Science',
       bio: localStorage.getItem('userBio') || 'Full Stack Developer | AI Enthusiast'
-    });
+    }));
 
     const savedPrefs = JSON.parse(localStorage.getItem('appPreferences'));
     if (savedPrefs) setPreferences(savedPrefs);
@@ -73,9 +75,22 @@ const Settings = () => {
     fileInputRef.current.click(); // Opens the native file browser
   };
 
+  // ✅ NEW: Read the image file and save it to LocalStorage as a Base64 string
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
-    if (file) alert(`Simulating upload for: ${file.name}`);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result;
+        // Save the image to local storage
+        localStorage.setItem('userAvatar', base64String);
+        // Tell the rest of the app to update!
+        window.dispatchEvent(new Event('profileUpdated'));
+        // Force a re-render in this component too
+        setProfileData(prev => ({ ...prev, avatarTrigger: Date.now() })); 
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // --- 2. PREFERENCES HANDLERS ---
@@ -177,10 +192,19 @@ const Settings = () => {
             <div className={styles.tabContent}>
               <h2>Public Profile</h2>
               
+              {/* ✅ NEW: Functional Avatar Section */}
               <div className={styles.avatarSection}>
-                <div className={styles.avatarPlaceholder}>{getInitials(profileData.fullName)}</div>
+                {localStorage.getItem('userAvatar') ? (
+                  <img 
+                    src={localStorage.getItem('userAvatar')} 
+                    alt="Profile" 
+                    className={styles.avatarPlaceholder} 
+                    style={{ objectFit: 'cover', padding: 0, border: 'none' }} 
+                  />
+                ) : (
+                  <div className={styles.avatarPlaceholder}>{getInitials(profileData.fullName)}</div>
+                )}
                 
-                {/* Hidden File Input & Functional Button */}
                 <input 
                   type="file" 
                   ref={fileInputRef} 

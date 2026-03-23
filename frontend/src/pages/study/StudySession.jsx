@@ -1,27 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Play, Square, X, Folder, BookOpen, Code, Edit3, Clock } from 'lucide-react';
+import { Play, Pause, Square, Folder, BookOpen, Code, Edit3, Clock, ArrowLeft, Star } from 'lucide-react';
 import axios from 'axios';
 import styles from './StudySession.module.css';
+import { useFocus } from '../../context/FocusContext'; 
 
 const StudySession = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ Now it perfectly catches the data from BOTH the Dashboard and the Practice Lab!
-  const [selectedSubject, setSelectedSubject] = useState(location.state?.defaultSubject || location.state?.subjectName || null);
+  const { 
+    selectedSubject, setSelectedSubject,
+    targetMinutes, setTargetMinutes,
+    remainingSeconds, setRemainingSeconds,
+    isActive, isPaused,
+    startSession, pauseSession, resumeSession, stopSession
+  } = useFocus();
+
   const [subjects, setSubjects] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(!selectedSubject);
-
-  const [targetMinutes, setTargetMinutes] = useState(25);
-  const [remainingSeconds, setRemainingSeconds] = useState(25 * 60);
-  const [isActive, setIsActive] = useState(false);
-  const [sessionStartTime, setSessionStartTime] = useState(null);
   const [notes, setNotes] = useState('');
+  
+  // ✅ NEW: Rating Modal State
+  const [showRating, setShowRating] = useState(false);
+  const [ratingValue, setRatingValue] = useState(5); // Default to 5 stars
+
+  useEffect(() => {
+    const passedSubject = location.state?.defaultSubject || location.state?.subjectName;
+    if (passedSubject && !isActive && selectedSubject !== passedSubject) {
+      setSelectedSubject(passedSubject);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, isActive, selectedSubject, setSelectedSubject]);
 
   useEffect(() => {
     if (!selectedSubject) {
       const fetchSubjects = async () => {
+        setLoadingSubjects(true);
         try {
           const token = localStorage.getItem('token');
           const res = await axios.get('http://localhost:5000/api/syllabus/list', {
@@ -38,60 +53,28 @@ const StudySession = () => {
     }
   }, [selectedSubject]);
 
-  useEffect(() => {
-    let interval;
-    if (isActive && remainingSeconds > 0) {
-      interval = setInterval(() => {
-        setRemainingSeconds((prev) => prev - 1);
-      }, 1000);
-    } else if (isActive && remainingSeconds === 0) {
-      clearInterval(interval);
-      handleStopSession(); 
-    }
-    return () => clearInterval(interval);
-  }, [isActive, remainingSeconds]);
-
-  const handleStartSession = () => {
-    setIsActive(true);
-    setSessionStartTime(new Date().toISOString());
-  };
-
-  const handleStopSession = async () => {
-    setIsActive(false);
-    const actualStudiedSeconds = (targetMinutes * 60) - remainingSeconds;
-    const durationMinutes = Math.floor(actualStudiedSeconds / 60);
-
-    if (durationMinutes >= 1) {
-      try {
-        const token = localStorage.getItem('token');
-        await axios.post('http://localhost:5000/api/practice/log-session', {
-          subjectName: selectedSubject,
-          startTime: sessionStartTime,
-          endTime: new Date().toISOString(),
-          durationMinutes: durationMinutes,
-          focusScore: 90 
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        alert(`Awesome job! ${durationMinutes} minutes logged to your Dashboard.`);
-      } catch (err) {
-        console.error("Failed to log session:", err);
-      }
-    } else {
-      alert("Session was too short to record (under 1 minute).");
-    }
-
-    setRemainingSeconds(targetMinutes * 60);
-    setSessionStartTime(null);
-  };
-
   const handleNavigateToPractice = () => {
-    if (selectedSubject === 'General Focus Session') {
-      navigate('/assessment');
+    navigate('/assessment', { state: { subjectName: selectedSubject } });
+  };
+
+  // ✅ NEW: Intercept the Stop button to show the rating modal
+  const handleInitiateStop = () => {
+    const studiedSeconds = (targetMinutes * 60) - remainingSeconds;
+    
+    if (studiedSeconds < 60) {
+        // If it's under a minute, don't bother asking for a rating, just stop it
+        handleStopAndSave(0);
     } else {
-      navigate('/assessment', { state: { subjectName: selectedSubject } });
+        if (!isPaused) pauseSession(); // Freeze the timer while they rate
+        setShowRating(true);
     }
+  };
+
+  // ✅ NEW: Save the score (Stars * 20 = Percentage)
+  const handleStopAndSave = async (score) => {
+    setShowRating(false);
+    await stopSession(score); 
+    setSelectedSubject(null); 
   };
 
   const formatTime = (totalSeconds) => {
@@ -100,11 +83,13 @@ const StudySession = () => {
     return `${m}:${s}`;
   };
 
-  // --- STEP 0: SUBJECT SELECTION GATE ---
   if (!selectedSubject) {
     return (
       <div className={styles.container}>
         <header className={`${styles.header} ${styles.animateFadeInUp}`}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer', color: '#94a3b8', marginBottom: '20px' }} onClick={() => navigate('/dashboard')}>
+            <ArrowLeft size={20} /> Back to Dashboard
+          </div>
           <div>
             <span className={styles.badge}>Focus Engine</span>
             <h2>What are we studying today?</h2>
@@ -112,7 +97,7 @@ const StudySession = () => {
           </div>
         </header>
         
-        {loadingSubjects ? <p style={{color: '#94a3b8'}}>Loading your subjects...</p> : (
+        {loadingSubjects ? <p style={{color: '#94a3b8', marginTop: '20px'}}>Loading your subjects...</p> : (
           <div className={styles.subjectGrid}>
             {subjects.length === 0 ? (
                <div className={`${styles.subjectCard} ${styles.animateFadeInUp}`}>
@@ -137,22 +122,19 @@ const StudySession = () => {
     );
   }
 
-  // --- STEP 1: MAIN FOCUS UI ---
   return (
     <div className={styles.container}>
       <header className={`${styles.headerRow} ${styles.animateFadeInUp}`}>
         <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: '#94a3b8', marginBottom: '15px', fontWeight: '500' }} onClick={() => navigate('/dashboard')}>
+            <ArrowLeft size={18} /> Back to Dashboard
+          </div>
           <span className={styles.badge}>FOCUS MODE</span>
           <h2 className={styles.title}>{selectedSubject}</h2>
         </div>
-        <button className={`${styles.exitBtn} ${styles.btnPulseHover}`} onClick={() => navigate('/dashboard')}>
-          <X size={16} /> Exit
-        </button>
       </header>
 
       <div className={styles.splitLayout}>
-        
-        {/* LEFT PANEL: TIMER */}
         <div className={`${styles.timerPanel} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.1s' }}>
           <div className={styles.timeSelector}>
             <Clock size={16} color="#94a3b8"/>
@@ -173,25 +155,40 @@ const StudySession = () => {
           </div>
 
           <div className={styles.timerCircle}>
-            <div className={styles.timeDisplay}>{formatTime(remainingSeconds)}</div>
-            <div className={styles.timerStatus}>{isActive ? "Focusing..." : "Ready to Start?"}</div>
+            <div className={styles.timeDisplay} style={{ color: isPaused ? '#f59e0b' : '#ffffff' }}>
+               {formatTime(remainingSeconds)}
+            </div>
+            <div className={styles.timerStatus}>
+              {isActive ? (isPaused ? "Paused" : "Focusing...") : "Ready to Start?"}
+            </div>
           </div>
 
-          {!isActive ? (
-            <button className={`${styles.startBtn} ${styles.btnPulseHover}`} onClick={handleStartSession}>
-              <Play size={28} fill="currentColor" />
-            </button>
-          ) : (
-            <button className={`${styles.stopBtn} ${styles.btnPulseHover}`} onClick={handleStopSession}>
-              <Square size={20} fill="currentColor" />
-              Stop Focus
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: '15px' }}>
+            {!isActive ? (
+              <button className={`${styles.startBtn} ${styles.btnPulseHover}`} onClick={startSession}>
+                <Play size={28} fill="currentColor" />
+              </button>
+            ) : (
+              <>
+                <button 
+                  className={styles.btnPulseHover} 
+                  onClick={isPaused ? resumeSession : pauseSession}
+                  style={{ background: isPaused ? '#10b981' : 'rgba(245, 158, 11, 0.2)', color: isPaused ? 'white' : '#f59e0b', border: isPaused ? 'none' : '1px solid #f59e0b', padding: '14px 28px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+                >
+                  {isPaused ? <Play size={20} fill="currentColor"/> : <Pause size={20} fill="currentColor"/>}
+                  {isPaused ? 'Resume' : 'Pause'}
+                </button>
+
+                {/* ✅ Trigger the modal instead of stopping instantly */}
+                <button className={`${styles.stopBtn} ${styles.btnPulseHover}`} onClick={handleInitiateStop}>
+                  <Square size={20} fill="currentColor" /> Stop
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* RIGHT PANEL: RESOURCES & NOTES */}
         <div className={`${styles.resourcesPanel} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.2s' }}>
-          
           <h3 className={styles.panelTitle}>Session Resources</h3>
           <div className={styles.resourceList}>
             <div className={`${styles.resourceCard} ${styles.btnPulseHover}`} onClick={() => navigate('/library')}>
@@ -201,29 +198,56 @@ const StudySession = () => {
                 <span className={styles.resourceTag}>Read</span>
               </div>
             </div>
-            
             <div className={`${styles.resourceCard} ${styles.btnPulseHover}`} onClick={handleNavigateToPractice}>
               <Code size={20} color="#8b5cf6" />
               <div>
                 <h4>Generate Practice Set</h4>
-                <span className={styles.resourceTag}>Code</span>
+                <span className={styles.resourceTag}>Practice</span>
               </div>
             </div>
           </div>
 
           <h3 className={styles.panelTitle} style={{marginTop: '30px'}}>Quick Notes</h3>
           <div className={styles.notesWrapper}>
-            <textarea 
-              className={styles.notesArea}
-              placeholder="Type your key takeaways here..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
+            <textarea className={styles.notesArea} placeholder="Type your key takeaways here..." value={notes} onChange={(e) => setNotes(e.target.value)} />
             <Edit3 size={16} className={styles.notesIcon} />
           </div>
-
         </div>
       </div>
+
+      {/* ✅ NEW: RATING MODAL OVERLAY */}
+      {showRating && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+            <div style={{ backgroundColor: '#1e293b', border: '1px solid #3b82f6', borderRadius: '20px', padding: '40px', width: '90%', maxWidth: '420px', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                <h3 style={{ fontSize: '1.8rem', margin: '0 0 10px 0', color: '#f8fafc', fontWeight: '800' }}>Session Complete</h3>
+                <p style={{ color: '#94a3b8', fontSize: '1.05rem', marginBottom: '30px' }}>How focused were you during this session?</p>
+                
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '40px' }}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                        <Star 
+                            key={star} 
+                            size={42} 
+                            fill={star <= ratingValue ? '#f59e0b' : 'transparent'} 
+                            color={star <= ratingValue ? '#f59e0b' : '#475569'}
+                            onClick={() => setRatingValue(star)}
+                            style={{ cursor: 'pointer', transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}
+                            onMouseOver={e => e.currentTarget.style.transform = 'scale(1.2)'}
+                            onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                        />
+                    ))}
+                </div>
+
+                <button 
+                    onClick={() => handleStopAndSave(ratingValue * 20)} // 5 stars = 100%, 4 stars = 80%, etc.
+                    style={{ background: '#10b981', color: 'white', border: 'none', padding: '14px 30px', borderRadius: '12px', fontSize: '1.15rem', fontWeight: 'bold', cursor: 'pointer', width: '100%', transition: 'background 0.2s', boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.4)' }}
+                    onMouseOver={e => e.currentTarget.style.background = '#059669'}
+                    onMouseOut={e => e.currentTarget.style.background = '#10b981'}
+                >
+                    Log Session & Exit
+                </button>
+            </div>
+        </div>
+      )}
     </div>
   );
 };
