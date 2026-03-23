@@ -171,7 +171,7 @@ const PractiseQuiz = () => {
 
         setSaveSuccess(`Evaluation Complete! Score: ${finalScore}%. Data logged to Analytics.`);
         setTimeout(() => setSaveSuccess(''), 6000);
-      } catch (err) {
+      } catch  {
         setSaveError("Evaluated, but failed to sync to Dashboard.");
       }
     } else {
@@ -259,7 +259,7 @@ const PractiseQuiz = () => {
 
       setIsSaveModalOpen(false);
       setSaveSuccess('Saved to library.');
-    } catch (error) {
+    } catch  {
       setSaveError('Failed to save content.');
     } finally {
       setIsSaving(false);
