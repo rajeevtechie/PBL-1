@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios'; // Make sure to import axios!
 import { User, Bell, Lock, Save, LogOut, Camera, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import styles from './Settings.module.css';
 
@@ -75,7 +76,7 @@ const Settings = () => {
     fileInputRef.current.click(); // Opens the native file browser
   };
 
-  // ✅ NEW: Read the image file and save it to LocalStorage as a Base64 string
+  // ✅ Read the image file and save it to LocalStorage as a Base64 string
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -94,7 +95,8 @@ const Settings = () => {
   };
 
   // --- 2. PREFERENCES HANDLERS ---
-  const handleTogglePreference = (key) => {
+  const handleTogglePreference = async (key) => {
+    // 1. Instantly update the React UI so it feels snappy
     setPreferences(prev => {
       const next = { ...prev, [key]: !prev[key] };
       localStorage.setItem('appPreferences', JSON.stringify(next));
@@ -107,6 +109,25 @@ const Settings = () => {
       
       return next;
     });
+
+    // ✅ 2. If they toggle Email Notifications, tell the backend!
+    if (key === 'emailNotifs') {
+      try {
+        const token = localStorage.getItem('token');
+        
+        // We calculate the NEW value by grabbing the opposite of the current state
+        const newEmailState = !preferences.emailNotifs; 
+        
+        // Hit the brand new userRoutes API you just built!
+        await axios.put('http://localhost:5000/api/users/preferences', 
+          { emailNotifs: newEmailState },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        console.log("Email preference saved to database!");
+      } catch (error) {
+        console.error("Failed to save email preference to database:", error);
+      }
+    }
   };
 
   // --- 3. SECURITY HANDLERS ---
@@ -192,7 +213,7 @@ const Settings = () => {
             <div className={styles.tabContent}>
               <h2>Public Profile</h2>
               
-              {/* ✅ NEW: Functional Avatar Section */}
+              {/* ✅ Functional Avatar Section */}
               <div className={styles.avatarSection}>
                 {localStorage.getItem('userAvatar') ? (
                   <img 
