@@ -1,18 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { UploadCloud, FileText, Sliders, Timer, Sparkles, Folder, Save, Loader2 } from 'lucide-react';
+import { UploadCloud, FileText, Sliders, Timer, Sparkles, Folder, Save, Loader2, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 import styles from './practise_lab.module.css';
 
 const TOPICS_KEY = 'practiceTopics';
 const SELECTED_KEY = 'practiceSelectedTopics';
 const SETTINGS_KEY = 'practiceSettings';
+// ✅ NEW: Keys to save your draft progress
+const DRAFT_TEXT_KEY = 'practiceDraftText';
+const DRAFT_FILE_META_KEY = 'practiceDraftFileMeta';
 
 const PracticeLab = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // --- SUBJECT GATE STATE ---
   const passedSubject = location.state?.subjectName;
   const [selectedSubject, setSelectedSubject] = useState(passedSubject ? { course_title: passedSubject } : null);
   
@@ -21,14 +23,25 @@ const PracticeLab = () => {
 
   // --- PRACTICE LAB STATE ---
   const [uploadedFile, setUploadedFile] = useState(null);
-  const [textInput, setTextInput] = useState('');
-  const [selectedTopics, setSelectedTopics] = useState([]);
+  
+  // ✅ FIX: Load drafted text and file metadata if the user navigated away and came back
+  const [textInput, setTextInput] = useState(() => sessionStorage.getItem(DRAFT_TEXT_KEY) || '');
+  const [draftFileMeta, setDraftFileMeta] = useState(() => JSON.parse(sessionStorage.getItem(DRAFT_FILE_META_KEY) || 'null'));
+
+  const [selectedTopics, setSelectedTopics] = useState(() => {
+    const storedSelected = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
+    return Array.isArray(storedSelected) ? storedSelected : [];
+  });
+
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
-  const [activeMode, setActiveMode] = useState('Quiz (MCQ)');
-  const [difficulty, setDifficulty] = useState('Medium');
-  const [questionCount, setQuestionCount] = useState(15);
-  const [timerEnabled, setTimerEnabled] = useState(true);
+  
+  // Load settings from storage so they don't reset when you leave the page
+  const savedSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+  const [activeMode, setActiveMode] = useState(savedSettings.mode || 'Quiz (MCQ)');
+  const [difficulty, setDifficulty] = useState(savedSettings.difficulty || 'Medium');
+  const [questionCount, setQuestionCount] = useState(savedSettings.questionCount || 15);
+  const [timerEnabled, setTimerEnabled] = useState(savedSettings.timerEnabled ?? true);
   
   const [isSavingFile, setIsSavingFile] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -37,7 +50,6 @@ const PracticeLab = () => {
   const [fileTitleError, setFileTitleError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
 
-  // Added "Study Notes" back so you can generate detailed notes!
   const modes = useMemo(() => (
     ['Quiz (MCQ)', 'Short Answer', 'Long Answer', 'Case Study', 'Mock Test', 'Study Notes']
   ), []);
@@ -59,7 +71,7 @@ const PracticeLab = () => {
             headers: { Authorization: `Bearer ${token}` }
           });
           setSubjects(res.data);
-        } catch  {
+        } catch {
           console.error("Failed to load subjects");
         } finally {
           setLoadingSubjects(false);
@@ -69,10 +81,10 @@ const PracticeLab = () => {
     }
   }, [passedSubject]);
 
+  // ✅ FIX: Save text input to session storage as they type
   useEffect(() => {
-    const storedSelected = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
-    setSelectedTopics(Array.isArray(storedSelected) ? storedSelected : []);
-  }, []);
+    sessionStorage.setItem(DRAFT_TEXT_KEY, textInput);
+  }, [textInput]);
 
   useEffect(() => {
     const settings = { mode: activeMode, difficulty, questionCount, timerEnabled };
@@ -87,9 +99,17 @@ const PracticeLab = () => {
   const handleDrop = (event) => {
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
+    handleFileUpload(file);
+  };
+
+  const handleFileUpload = (file) => {
     if (file) {
       setUploadedFile(file);
       setExtractError('');
+      // ✅ Save metadata so the user knows they uploaded something if they navigate away
+      const meta = { name: file.name, size: file.size };
+      setDraftFileMeta(meta);
+      sessionStorage.setItem(DRAFT_FILE_META_KEY, JSON.stringify(meta));
     }
   };
 
@@ -98,7 +118,12 @@ const PracticeLab = () => {
     setIsExtracting(true);
 
     if (!uploadedFile && !textInput.trim()) {
-      setExtractError('Please upload a syllabus PDF or paste text before continuing.');
+      // ✅ If they have a draft file but no actual file (because they navigated away), warn them.
+      if (draftFileMeta && !uploadedFile) {
+         setExtractError('Browser security requires you to re-select your PDF file before extracting.');
+      } else {
+         setExtractError('Please upload a syllabus PDF or paste text before continuing.');
+      }
       setIsExtracting(false);
       return;
     }
@@ -126,6 +151,11 @@ const PracticeLab = () => {
       localStorage.setItem(TOPICS_KEY, JSON.stringify(extractedTopics));
       localStorage.setItem(SELECTED_KEY, JSON.stringify([]));
       setSelectedTopics([]);
+      
+      // Clear drafts on success
+      sessionStorage.removeItem(DRAFT_TEXT_KEY);
+      sessionStorage.removeItem(DRAFT_FILE_META_KEY);
+      
       navigate('/practice-topics');
     } catch (error) {
       setExtractError(error.message);
@@ -135,7 +165,10 @@ const PracticeLab = () => {
   };
 
   const handleSaveFile = async (titleValue) => {
-    if (!uploadedFile) return;
+    if (!uploadedFile) {
+        if (draftFileMeta) setSaveError("Please re-select the file. Browsers clear files when navigating between pages.");
+        return;
+    }
 
     setIsSavingFile(true);
     setSaveError('');
@@ -160,7 +193,7 @@ const PracticeLab = () => {
       setIsFileModalOpen(false);
       setFileTitle('');
       setFileTitleError('');
-      setSaveSuccess('Saved to library.');
+      setSaveSuccess('Saved to library. You can now extract topics!');
     } catch (error) {
       setSaveError(error.message);
     } finally {
@@ -237,10 +270,18 @@ const PracticeLab = () => {
 
       {/* STEP 1: UPLOAD & EXTRACT */}
       <section className={`${styles.sectionCard} ${styles.animateFadeInUp}`} style={{animationDelay: '0.1s'}}>
-        <div className={styles.sectionHeader}>
-          <div className={styles.stepBadge}>Step 1</div>
-          <h3>Upload Content</h3>
-          <p>Drag & drop a PDF or paste your text.</p>
+        <div className={styles.sectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div className={styles.stepBadge}>Step 1</div>
+            <h3>Upload Content</h3>
+            <p>Drag & drop a PDF or paste your text.</p>
+          </div>
+          {/* Draft Indicator */}
+          {(textInput.trim() || draftFileMeta) && !uploadedFile && (
+             <span style={{ fontSize: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                Draft Restored
+             </span>
+          )}
         </div>
 
         <div className={styles.uploadGrid}>
@@ -249,10 +290,18 @@ const PracticeLab = () => {
             <h4>Upload PDF</h4>
             <p>Drop your study Material here or browse.</p>
             <label className={styles.fileButton}>
-              <input type="file" accept=".pdf" onChange={(event) => setUploadedFile(event.target.files?.[0] || null)} hidden />
+              <input type="file" accept=".pdf" onChange={(event) => handleFileUpload(event.target.files?.[0])} hidden />
               Choose File
             </label>
-            <div className={styles.fileMeta}>{uploadedFile ? uploadedFile.name : 'No file selected'}</div>
+            
+            {/* Intelligent File Display */}
+            <div className={styles.fileMeta} style={{ color: uploadedFile ? '#10b981' : (draftFileMeta ? '#f59e0b' : '#94a3b8') }}>
+                {uploadedFile 
+                    ? <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'}}><CheckCircle2 size={14}/> {uploadedFile.name} ready!</span> 
+                    : (draftFileMeta ? `Please re-select: ${draftFileMeta.name}` : 'No file selected')
+                }
+            </div>
+
             {uploadedFile && (
               <button className={`${styles.secondaryAction} ${styles.btnPulseHover}`} onClick={openFileModal} disabled={isSavingFile} style={{ marginTop: '12px' }}>
                 <Save size={16}/> {isSavingFile ? 'Saving...' : 'Save to Library'}
@@ -266,7 +315,6 @@ const PracticeLab = () => {
           </div>
         </div>
 
-        {/* THE FIX: Button is now inside the card, clearly visible, with no opacity bugs! */}
         <div className={styles.extractActionRow}>
           <button 
             className={`${styles.primaryAction} ${styles.btnPulseHover}`} 
