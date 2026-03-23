@@ -37,3 +37,66 @@
   padding: 2rem;
   overflow-y: auto;
 }
+
+/* FLOATING TIMER CSS */
+.floatingTimer {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  background: #1e293b;
+  border: 1px solid #3b82f6;
+  border-radius: 12px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  z-index: 1000;
+  color: white;
+  animation: slideIn 0.3s ease-out;
+}
+.timerInfo {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+.timerSubject {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-weight: bold;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.timerClock {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #10b981;
+  font-variant-numeric: tabular-nums;
+}
+.timerControls {
+  display: flex;
+  gap: 8px;
+}
+.controlBtn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: white;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.controlBtn:hover {
+  background: rgba(255,255,255,0.2);
+}
+@keyframes slideIn {
+  from { transform: translateY(50px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
