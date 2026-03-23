@@ -141,3 +141,5 @@ TRUNCATE TABLE roadmap_recommendations;
 
 -- 6. Re-enable foreign key checks to secure the database again
 SET FOREIGN_KEY_CHECKS = 1;
+
+ALTER TABLE users ADD COLUMN email_notifications BOOLEAN DEFAULT TRUE;

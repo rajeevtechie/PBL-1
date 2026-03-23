@@ -13,6 +13,7 @@ const libraryRoutes = require('./routes/libraryRoutes');
 const focusRoutes = require('./routes/focusRoutes');
 const insightRoutes = require('./routes/insightRoutes');
 const errorHandler = require('./middlewares/errorHandler');
+const startWeeklyEmailCron = require('./cron/weeklySummary');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -62,3 +63,4 @@ app.use(errorHandler);
 app.listen(PORT, () => {
     console.log(`🚀 InsightED Server running on port ${PORT}`);
 });
+startWeeklyEmailCron();
