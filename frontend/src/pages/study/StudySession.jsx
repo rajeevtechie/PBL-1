@@ -8,7 +8,8 @@ const StudySession = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [selectedSubject, setSelectedSubject] = useState(location.state?.subjectName || null);
+  // ✅ Now it perfectly catches the data from BOTH the Dashboard and the Practice Lab!
+  const [selectedSubject, setSelectedSubject] = useState(location.state?.defaultSubject || location.state?.subjectName || null);
   const [subjects, setSubjects] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(!selectedSubject);
 

@@ -68,6 +68,7 @@ function App() {
             Focus Mode takes over the whole screen (No Sidebar).
            ==================================================== */}
         <Route path="/study" element={<StudySession />} />
+        <Route path="/focus" element={<StudySession />} />
 
       </Routes>
     </BrowserRouter>
