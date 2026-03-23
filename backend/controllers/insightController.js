@@ -1,6 +1,13 @@
 // backend/controllers/insightController.js
 const db = require('../config/db');
 
+// ✅ 1. Import and setup Gemini AI at the top
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require("dotenv").config();
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+
+// --- DASHBOARD ANALYTICS ---
 exports.getDashboardAnalytics = async (req, res, next) => {
     try {
         const userId = req.user?.id || req.userId;
@@ -109,4 +116,35 @@ exports.getDashboardAnalytics = async (req, res, next) => {
         console.error("Analytics Error:", error);
         res.status(500).json({ message: "Failed to generate insights." });
     }
+};
+
+/// ✅ 2. NEW: GOD-MODE AI MENTOR CHAT
+exports.chatWithMentor = async (req, res, next) => {
+  try {
+    // Catch the new context variables from the frontend!
+    const { message, userName, currentFocus } = req.body;
+    
+    // Inject the real data into the AI's brain
+    const prompt = `You are the "InsightED AI Mentor", an elite, encouraging academic tutor. 
+    
+    Context about the student you are talking to:
+    - Name: ${userName || "Student"}
+    - Current Average Focus Score: ${currentFocus ? currentFocus + '%' : "Unknown"}
+    
+    Rules for your response:
+    1. Reply directly to the student's message.
+    2. Keep your response conversational, helpful, and strictly under 4 sentences.
+    3. If they ask about their performance or focus, use their Focus Score to give personalized advice (e.g., if it's under 60%, suggest the Pomodoro technique or taking a walk; if it's over 80%, praise their deep work momentum).
+    4. Speak like a human mentor, not an AI language model.
+
+    Student says: "${message}"`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    
+    res.status(200).json({ reply: text });
+  } catch (error) {
+    console.error("AI Chat Error:", error);
+    res.status(500).json({ reply: "Sorry, my servers are taking a quick nap. Try again in a moment!" });
+  }
 };

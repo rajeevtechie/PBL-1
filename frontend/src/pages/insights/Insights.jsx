@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { Lightbulb, TrendingUp, AlertTriangle, ArrowRight, Send, Loader2, CheckCircle } from 'lucide-react';
 import styles from './Insights.module.css';
 
 const Insights = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   
   // --- LIVE DATA STATE ---
@@ -14,9 +16,12 @@ const Insights = () => {
   });
   const [recommendations, setRecommendations] = useState([]);
 
+  // Extract the user's first name for a personalized greeting
+  const firstName = (localStorage.getItem('userName') || 'There').split(' ')[0];
+
   // --- INTERACTIVE CHAT STATE ---
   const [chatMessages, setChatMessages] = useState([
-    { sender: 'ai', text: 'Hello Rajeev! Based on your recent dashboard analytics, how can I help you optimize your study sessions today?', time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
+    { sender: 'ai', text: `Hello ${firstName}! I am your InsightED AI Mentor. Based on your recent dashboard analytics, how can I help you optimize your study sessions today?`, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
   ]);
   const [currentInput, setCurrentInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
@@ -58,26 +63,48 @@ const Insights = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isAiTyping]);
 
-  // --- CHAT SUBMIT HANDLER ---
-  const handleSendMessage = (e) => {
+  // --- ✅ NEW: DYNAMIC AI CHAT HANDLER ---
+  // --- ✅ GOD-MODE: DYNAMIC AI CHAT HANDLER ---
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!currentInput.trim()) return;
 
-    const newMsg = { sender: 'user', text: currentInput, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
+    const userText = currentInput.trim();
+    const newMsg = { sender: 'user', text: userText, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) };
+    
     setChatMessages(prev => [...prev, newMsg]);
     setCurrentInput('');
     setIsAiTyping(true);
 
-    // Mock an AI response delay to make it feel real
-    setTimeout(() => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // ✅ We are now passing the Name and Focus Score to the backend!
+      const res = await axios.post('http://localhost:5000/api/insights/chat', 
+        { 
+          message: userText,
+          userName: firstName,
+          currentFocus: metrics.avgFocus
+        }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
       const aiResponse = { 
         sender: 'ai', 
-        text: "That's a great question. Based on your current syllabus, I recommend reviewing that topic during your peak focus hours for maximum retention.", 
+        text: res.data.reply || "I encountered a processing error.", 
         time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
       };
       setChatMessages(prev => [...prev, aiResponse]);
+
+    } catch {
+      setChatMessages(prev => [...prev, { 
+        sender: 'ai', 
+        text: "I am having trouble connecting to the InsightED servers right now. Please check your connection!", 
+        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
+      }]);
+    } finally {
       setIsAiTyping(false);
-    }, 1500);
+    }
   };
 
   if (loading) {
@@ -89,7 +116,6 @@ const Insights = () => {
   }
 
   // --- DYNAMIC ALERT LOGIC ---
-  // If avg focus is low, show a warning. If high, show a positive momentum card!
   const isFocusLow = metrics.avgFocus > 0 && metrics.avgFocus < 60;
 
   return (
@@ -140,32 +166,39 @@ const Insights = () => {
           </p>
         </div>
 
-        {/* 3. LIVE CAREER RESOURCE RECOMMENDATION */}
+        {/* 3. DYNAMIC CAREER TRACK OR PROPER EMPTY STATE */}
         <div className={`${styles.insightCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.3s' }}>
           <div className={styles.cardHeader}>
             <div className={styles.iconBox}><Lightbulb size={20} /></div>
             <h3>Career Track Recommendation</h3>
           </div>
-          <p>Based on your industry gap analysis, you should focus on this missing skill:</p>
           
           {recommendations.length > 0 ? (
-            <div className={styles.resourceLink}>
-              <div className={styles.resourceIcon} style={{ background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold' }}>
-                {recommendations[0].topic_name.charAt(0)}
+            <>
+              <p>Based on your industry gap analysis, you should focus on this missing skill:</p>
+              <div className={styles.resourceLink} onClick={() => navigate('/roadmap')}>
+                <div className={styles.resourceIcon} style={{ background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold' }}>
+                  {recommendations[0].topic_name.charAt(0)}
+                </div>
+                <div>
+                  <h4>{recommendations[0].topic_name}</h4>
+                  <span>{recommendations[0].category} • {recommendations[0].importance_level} Priority</span>
+                </div>
               </div>
-              <div>
-                <h4>{recommendations[0].topic_name}</h4>
-                <span>{recommendations[0].category} • {recommendations[0].importance_level} Priority</span>
-              </div>
-            </div>
+            </>
           ) : (
-            <div className={styles.resourceLink}>
-              <img src="https://ui-avatars.com/api/?name=R&background=0D8ABC&color=fff" alt="Resource" className={styles.resourceIcon} />
-              <div>
-                <h4>Clean Code Patterns in React</h4>
-                <span>Medium.com • 8 min read</span>
+            <>
+              <p>You haven't generated an industry gap analysis for your active syllabus yet.</p>
+              <div className={styles.resourceLink} onClick={() => navigate('/roadmap')} style={{ border: '1px dashed var(--border-color)', background: 'transparent' }}>
+                <div className={styles.resourceIcon} style={{ background: 'var(--bg-panel-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                  <Lightbulb size={20} />
+                </div>
+                <div>
+                  <h4 style={{ color: 'var(--text-main)' }}>Analyze Career Gaps</h4>
+                  <span>Head to the Roadmap to unlock recommendations.</span>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
@@ -173,14 +206,14 @@ const Insights = () => {
       {/* RIGHT COLUMN: INTERACTIVE AI MENTOR CHAT */}
       <div className={`${styles.chatColumn} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.4s' }}>
         <div className={styles.chatHeader}>
-          <h3>EduNexus AI Mentor</h3>
+          <h3>InsightED AI Mentor</h3>
           <span className={styles.onlineDot}></span>
         </div>
         
         <div className={styles.chatWindow}>
           {chatMessages.map((msg, index) => (
             <div key={index} className={`${styles.message} ${msg.sender === 'ai' ? styles.aiMessage : styles.userMessage} ${styles.animateFadeInUp}`} style={{ animationDelay: '0s', animationDuration: '0.3s' }}>
-              <p style={{ margin: 0 }}>{msg.text}</p>
+              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{msg.text}</p>
               <span className={styles.time}>{msg.time}</span>
             </div>
           ))}
