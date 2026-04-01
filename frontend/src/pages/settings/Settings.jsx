@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios'; // Make sure to import axios!
+import axios from 'axios';
 import { User, Bell, Lock, Save, LogOut, Camera, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import styles from './Settings.module.css';
 
@@ -14,7 +14,7 @@ const Settings = () => {
     university: '',
     major: '',
     bio: '',
-    avatarTrigger: Date.now() // Used to force re-render when image updates
+    avatarTrigger: Date.now() 
   });
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState(false);
@@ -26,6 +26,10 @@ const Settings = () => {
     emailNotifs: true,
     studyReminders: true
   });
+
+  // --- GUARDIAN CC STATE ---
+  const [parentEmail, setParentEmail] = useState(localStorage.getItem('parentEmail') || '');
+  const [isParentSaving, setIsParentSaving] = useState(false);
 
   // --- SECURITY STATE ---
   const [passwords, setPasswords] = useState({ current: '', new: '' });
@@ -63,7 +67,6 @@ const Settings = () => {
       localStorage.setItem('userMajor', profileData.major);
       localStorage.setItem('userBio', profileData.bio);
       
-      // Dispatch custom event to tell the top-right Navbar avatar to update instantly!
       window.dispatchEvent(new Event('profileUpdated'));
 
       setIsProfileSaving(false);
@@ -73,21 +76,17 @@ const Settings = () => {
   };
 
   const handlePhotoClick = () => {
-    fileInputRef.current.click(); // Opens the native file browser
+    fileInputRef.current.click(); 
   };
 
-  // ✅ Read the image file and save it to LocalStorage as a Base64 string
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64String = reader.result;
-        // Save the image to local storage
         localStorage.setItem('userAvatar', base64String);
-        // Tell the rest of the app to update!
         window.dispatchEvent(new Event('profileUpdated'));
-        // Force a re-render in this component too
         setProfileData(prev => ({ ...prev, avatarTrigger: Date.now() })); 
       };
       reader.readAsDataURL(file);
@@ -96,37 +95,47 @@ const Settings = () => {
 
   // --- 2. PREFERENCES HANDLERS ---
   const handleTogglePreference = async (key) => {
-    // 1. Instantly update the React UI so it feels snappy
     setPreferences(prev => {
       const next = { ...prev, [key]: !prev[key] };
       localStorage.setItem('appPreferences', JSON.stringify(next));
       
-      // Actively toggle Dark Mode on the body
       if (key === 'darkMode') {
         if (next.darkMode) document.body.classList.remove('light-theme');
         else document.body.classList.add('light-theme');
       }
-      
       return next;
     });
 
-    // ✅ 2. If they toggle Email Notifications, tell the backend!
     if (key === 'emailNotifs') {
       try {
         const token = localStorage.getItem('token');
-        
-        // We calculate the NEW value by grabbing the opposite of the current state
         const newEmailState = !preferences.emailNotifs; 
         
-        // Hit the brand new userRoutes API you just built!
         await axios.put('http://localhost:5000/api/users/preferences', 
           { emailNotifs: newEmailState },
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        console.log("Email preference saved to database!");
       } catch (error) {
         console.error("Failed to save email preference to database:", error);
       }
+    }
+  };
+
+  // --- GUARDIAN CC HANDLER ---
+  const handleSaveParentEmail = async () => {
+    setIsParentSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put('http://localhost:5000/api/users/parent-email', 
+        { parentEmail },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      localStorage.setItem('parentEmail', parentEmail);
+      alert("Guardian email saved successfully!"); 
+    } catch (error) {
+      console.error("Failed to save guardian email:", error);
+    } finally {
+      setIsParentSaving(false);
     }
   };
 
@@ -150,7 +159,6 @@ const Settings = () => {
     setIsSecSaving(true);
     setSecMessage({ type: '', text: '' });
 
-    // Simulate backend password update
     setTimeout(() => {
       setIsSecSaving(false);
       setSecMessage({ type: 'success', text: 'Password securely updated!' });
@@ -162,12 +170,11 @@ const Settings = () => {
   const handleDeleteAccount = () => {
     const isConfirmed = window.confirm("Are you absolutely sure you want to delete your account? This action cannot be undone and all roadmap data will be lost.");
     if (isConfirmed) {
-      localStorage.clear(); // Wipe session
-      navigate('/login');   // Boot them to login
+      localStorage.clear(); 
+      navigate('/login');   
     }
   };
 
-  // Generate Initials
   const getInitials = (name) => {
     if (!name) return 'U';
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -213,7 +220,6 @@ const Settings = () => {
             <div className={styles.tabContent}>
               <h2>Public Profile</h2>
               
-              {/* ✅ Functional Avatar Section */}
               <div className={styles.avatarSection}>
                 {localStorage.getItem('userAvatar') ? (
                   <img 
@@ -302,6 +308,39 @@ const Settings = () => {
                   <span className={styles.slider}></span>
                 </label>
               </div>
+
+              {/* GUARDIAN CC INPUT (Shows only when Email Notifications are ON) */}
+              {preferences.emailNotifs && (
+                <div className={styles.settingItem} style={{ borderTop: 'none', paddingTop: '0', paddingLeft: '20px', display: 'block' }}>
+                  <p style={{ marginBottom: '8px', fontSize: '13px', color: 'var(--text-dim)' }}>
+                    <strong>Guardian CC (Optional):</strong> Send a copy of your weekly report to a parent or mentor.
+                  </p>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <input 
+                      type="email" 
+                      placeholder="parent@example.com" 
+                      value={parentEmail}
+                      onChange={(e) => setParentEmail(e.target.value)}
+                      style={{ 
+                        flex: 1, 
+                        padding: '8px 12px', 
+                        borderRadius: '6px', 
+                        border: '1px solid var(--border-color)', 
+                        background: 'var(--bg-panel)',
+                        color: 'var(--text-main)'
+                      }}
+                    />
+                    <button 
+                      onClick={handleSaveParentEmail} 
+                      disabled={isParentSaving}
+                      className={`${styles.saveBtn} ${styles.btnPulseHover}`}
+                      style={{ padding: '8px 16px', margin: 0, height: 'auto' }}
+                    >
+                      {isParentSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className={styles.settingItem}>
                 <div>
