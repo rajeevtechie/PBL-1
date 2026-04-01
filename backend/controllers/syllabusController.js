@@ -1,3 +1,4 @@
+const crypto = require('crypto'); // 👈 NEW: Built-in Node library for hashing
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const db = require('../config/db');
 require('dotenv').config();
@@ -6,53 +7,77 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
 // --- 1. UPLOAD & ANALYZE SYLLABUS ---
-// --- 1. UPLOAD & ANALYZE SYLLABUS ---
+// --- 1. UPLOAD & ANALYZE SYLLABUS (NOW WITH PDF CACHING!) ---
 exports.uploadSyllabus = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-        console.log(`📤 Processing file: ${req.file.originalname} for User ID: ${req.user.id}`);
+        const userId = req.user.id;
+        console.log(`📤 Processing file: ${req.file.originalname} for User ID: ${userId}`);
 
-        const filePart = { inlineData: { data: req.file.buffer.toString("base64"), mimeType: req.file.mimetype } };
-        const prompt = `
-        System: You are the InsightED academic curriculum parser. 
-        Task: Analyze this syllabus file and extract the course structure.
-        Output Format: Strictly JSON. No markdown. No intro text.
-        Schema: { "courseTitle": "string", "units": [ { "unitNumber": number, "title": "string", "topics": ["string", "string"], "is_completed": false } ] }
-        `;
+        // ⚡ 1. GENERATE A UNIQUE FINGERPRINT FOR THE PDF
+        // This creates a unique string based on the actual contents of the file
+        const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
+        const cacheKey = `pdf_${fileHash}`;
 
-        const result = await model.generateContent([prompt, filePart]);
-        let text = await result.response.text();
-        
-        // Robust JSON extraction
-        text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-        const startIndex = text.indexOf('{');
-        const endIndex = text.lastIndexOf('}');
-        if (startIndex !== -1 && endIndex !== -1) text = text.substring(startIndex, endIndex + 1);
+        let syllabusJson = null;
 
-        const syllabusJson = JSON.parse(text);
-        const userId = req.user.id; 
+        // ⚡ 2. CHECK THE CACHE
+        const [cachedData] = await db.execute('SELECT response_data FROM ai_cache WHERE cache_key = ?', [cacheKey]);
+
+        if (cachedData.length > 0) {
+            console.log(`⚡ CACHE HIT! This exact PDF was parsed before. Loading instantly.`);
+            syllabusJson = JSON.parse(cachedData[0].response_data);
+        } else {
+            console.log(`🐢 CACHE MISS. First time seeing this PDF. Asking Gemini...`);
+            
+            const filePart = { inlineData: { data: req.file.buffer.toString("base64"), mimeType: req.file.mimetype } };
+            const prompt = `
+            System: You are the InsightED academic curriculum parser. 
+            Task: Analyze this syllabus file and extract the course structure.
+            Output Format: Strictly JSON. No markdown. No intro text.
+            Schema: { "courseTitle": "string", "units": [ { "unitNumber": number, "title": "string", "topics": ["string", "string"], "is_completed": false } ] }
+            `;
+
+            const result = await model.generateContent([prompt, filePart]);
+            let text = await result.response.text();
+            
+            // Robust JSON extraction
+            text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+            const startIndex = text.indexOf('{');
+            const endIndex = text.lastIndexOf('}');
+            if (startIndex !== -1 && endIndex !== -1) text = text.substring(startIndex, endIndex + 1);
+
+            syllabusJson = JSON.parse(text);
+
+            // ⚡ Save the AI's hard work to the database for the next user!
+            try {
+                await db.execute('INSERT INTO ai_cache (cache_key, response_data) VALUES (?, ?)', [cacheKey, JSON.stringify(syllabusJson)]);
+            } catch (cacheErr) {
+                console.warn("⚠️ Could not save PDF to cache:", cacheErr.message);
+            }
+        }
+
+        // --- 3. SAVE THE SYLLABUS TO THE USER'S ACCOUNT ---
         const courseTitle = syllabusJson.courseTitle || "Untitled Course";
 
         const [existing] = await db.execute('SELECT id FROM syllabuses WHERE user_id = ? AND course_title = ?', [userId, courseTitle]);
         if (existing.length > 0) {
-            console.log("⚠️ Syllabus already exists. Prompting overwrite.");
+            console.log("⚠️ Syllabus already exists for this user. Prompting overwrite.");
             return res.status(409).json({ message: `Syllabus exists.`, parsedData: syllabusJson, existingId: existing[0].id });
         }
 
         const [resultDb] = await db.execute('INSERT INTO syllabuses (user_id, course_title, structure) VALUES (?, ?, ?)', [userId, courseTitle, JSON.stringify(syllabusJson)]);
         
-        // 🚨 PREVENTING THE CRASH: Wrapping library_items insert in a try/catch
         try {
             await db.execute('INSERT INTO library_items (user_id, title, type, category) VALUES (?, ?, ?, ?)', [userId, courseTitle, 'folder', 'uploaded']);
         } catch (libErr) {
-            console.warn("⚠️ Warning: Could not insert into library_items (table might not exist yet). Skipping safely.");
+            console.warn("⚠️ Warning: Could not insert into library_items. Skipping safely.");
         }
 
         console.log("✅ Upload & Analysis Successful!");
         res.status(201).json({ message: "Processed successfully", syllabusId: resultDb.insertId, data: syllabusJson });
     } catch (error) { 
-        // ✅ Bringing back the console logging so we can see any API/DB errors!
         console.error("❌ Upload Error:", error);
         res.status(500).json({ message: "AI Processing Failed", error: error.message }); 
     }
@@ -68,7 +93,7 @@ exports.confirmUpload = async (req, res) => {
     } catch (error) { res.status(500).json({ message: "Save Failed", error: error.message }); }
 };
 
-// --- 3. GET AGGREGATE PROGRESS (WITH DASHBOARD DRILL-DOWN) ---
+// --- 3. GET AGGREGATE PROGRESS ---
 exports.getAggregateProgress = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -86,7 +111,6 @@ exports.getAggregateProgress = async (req, res) => {
         for (const syl of syllabuses) {
             const structure = typeof syl.structure === 'string' ? JSON.parse(syl.structure) : syl.structure;
 
-            // Subject Academic Math
             let subjTotalUnits = 0;
             let subjCompletedUnits = 0;
             if (structure && structure.units) {
@@ -98,7 +122,6 @@ exports.getAggregateProgress = async (req, res) => {
             totalAcademicUnits += subjTotalUnits;
             completedAcademicUnits += subjCompletedUnits;
 
-            // Subject Career Math
             const subjRecs = recs.filter(r => r.syllabus_id === syl.id);
             const subjTotalRecs = subjRecs.length;
             const subjCompletedRecs = subjRecs.filter(r => r.is_completed === true || r.is_completed === 1).length;
@@ -107,7 +130,6 @@ exports.getAggregateProgress = async (req, res) => {
             totalCareerRecs += subjTotalRecs;
             completedCareerRecs += subjCompletedRecs;
 
-            // Save details for Dashboard Accordion
             details.push({ id: syl.id, courseTitle: syl.course_title, academicProgress: subjAcademicProg, careerProgress: subjCareerProg });
         }
 
@@ -173,7 +195,7 @@ exports.getCareerInsights = async (req, res) => {
     } catch (error) { res.status(500).json({ message: "Failed" }); }
 };
 
-// --- 8. GENERATE CAREER INSIGHTS (CONTEXTUAL TRAFFIC COP) ---
+// --- 8. ✅ NEW: GENERATE CAREER INSIGHTS (WITH DATABASE CACHING) ---
 exports.generateCareerInsights = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -194,37 +216,61 @@ exports.generateCareerInsights = async (req, res) => {
         const courseTitle = rows[0].course_title;
         const academicStructure = rows[0].structure;
 
-        // Traffic Cop: Academic vs Industry
         const isAcademicMode = /academic|exam|examination|university|pass|score|college|grade/i.test(targetRole);
-        let prompt = "";
-
-        if (isAcademicMode) {
-            prompt = `
-            System: You are an expert university professor and exam predictor.
-            Task: Analyze the following syllabus for "${courseTitle}". Predict the top 3 to 5 highest-weightage exam topics.
-            Syllabus: ${typeof academicStructure === 'string' ? academicStructure : JSON.stringify(academicStructure)}
-            Output Format: Strictly JSON. Schema: {"missingSkills": [{"topic_name": "string", "category": "Exam Prediction", "importance_level": "Critical" | "High" | "Medium"}]}
-            `;
-        } else {
-            prompt = `
-            System: You are an elite tech industry career advisor.
-            Task: Analyze this specific academic syllabus ("${courseTitle}"). The user wants to be a "${targetRole}". 
-            Identify 3 to 5 critical industry skills strictly related to this subject that the university is NOT teaching them.
-            Syllabus: ${typeof academicStructure === 'string' ? academicStructure : JSON.stringify(academicStructure)}
-            Output Format: Strictly JSON. Schema: {"missingSkills": [{"topic_name": "string", "category": "Industry Gap", "importance_level": "Critical" | "High"}]}
-            `;
-        }
-
-        const result = await model.generateContent(prompt);
-        let text = await result.response.text();
-
-        // Robust JSON extraction
-        text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-        const startIndex = text.indexOf('{');
-        const endIndex = text.lastIndexOf('}');
-        if (startIndex !== -1 && endIndex !== -1) text = text.substring(startIndex, endIndex + 1);
         
-        const careerJson = JSON.parse(text);
+        // ⚡ THE CACHING ENGINE START ⚡
+        // Create a unique key based on the course name and the user's goal
+        const rawKey = `insights_${courseTitle}_${targetRole}`;
+        const cacheKey = rawKey.toLowerCase().replace(/[^a-z0-9]/g, '_'); 
+
+        let careerJson = null;
+
+        // 1. Check if we already asked Gemini this exact question
+        const [cachedData] = await db.execute('SELECT response_data FROM ai_cache WHERE cache_key = ?', [cacheKey]);
+
+        if (cachedData.length > 0) {
+            console.log(`⚡ CACHE HIT! Loading ${targetRole} roadmap for ${courseTitle} instantly.`);
+            careerJson = JSON.parse(cachedData[0].response_data);
+        } else {
+            console.log(`🐢 CACHE MISS. Asking Gemini for ${targetRole} roadmap for ${courseTitle}...`);
+            
+            let prompt = "";
+            if (isAcademicMode) {
+                prompt = `
+                System: You are an expert university professor and exam predictor.
+                Task: Analyze the following syllabus for "${courseTitle}". Predict the top 3 to 5 highest-weightage exam topics.
+                Syllabus: ${typeof academicStructure === 'string' ? academicStructure : JSON.stringify(academicStructure)}
+                Output Format: Strictly JSON. Schema: {"missingSkills": [{"topic_name": "string", "category": "Exam Prediction", "importance_level": "Critical" | "High" | "Medium"}]}
+                `;
+            } else {
+                prompt = `
+                System: You are an elite tech industry career advisor.
+                Task: Analyze this specific academic syllabus ("${courseTitle}"). The user wants to be a "${targetRole}". 
+                Identify 3 to 5 critical industry skills strictly related to this subject that the university is NOT teaching them.
+                Syllabus: ${typeof academicStructure === 'string' ? academicStructure : JSON.stringify(academicStructure)}
+                Output Format: Strictly JSON. Schema: {"missingSkills": [{"topic_name": "string", "category": "Industry Gap", "importance_level": "Critical" | "High"}]}
+                `;
+            }
+
+            const result = await model.generateContent(prompt);
+            let text = await result.response.text();
+
+            text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+            const startIndex = text.indexOf('{');
+            const endIndex = text.lastIndexOf('}');
+            if (startIndex !== -1 && endIndex !== -1) text = text.substring(startIndex, endIndex + 1);
+            
+            careerJson = JSON.parse(text);
+
+            // 2. Save it to the cache so the next user gets it instantly!
+            try {
+                await db.execute('INSERT INTO ai_cache (cache_key, response_data) VALUES (?, ?)', [cacheKey, JSON.stringify(careerJson)]);
+            } catch (cacheErr) {
+                console.warn("⚠️ Could not save to cache (table might not exist yet):", cacheErr.message);
+            }
+        }
+        // ⚡ THE CACHING ENGINE END ⚡
+
         const skills = careerJson.missingSkills || careerJson.missing_skills || careerJson.skills || [];
 
         // Save Goal appropriately (Global vs Local)
@@ -261,7 +307,7 @@ exports.toggleRecommendation = async (req, res) => {
     } catch (error) { res.status(500).json({ message: "Failed" }); }
 };
 
-// --- 10. UPDATE ACADEMIC SYLLABUS STRUCTURE (For Roadmap.jsx Checkboxes) ---
+// --- 10. UPDATE ACADEMIC SYLLABUS STRUCTURE ---
 exports.updateSyllabusStructure = async (req, res) => {
     try {
         const userId = req.user.id;

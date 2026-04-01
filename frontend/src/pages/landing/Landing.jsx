@@ -27,7 +27,7 @@ const Landing = () => {
             <span className={styles.highlight}>Syllabus</span> & <span className={styles.highlight}>Industry</span>
           </h1>
           <p className={styles.heroSub}>
-            Don't just pass your exams. Build a career. EduNexus syncs your academic curriculum with real-world job skills in one dual-track roadmap.
+            Don't just pass your exams. Build a career. InsightED syncs your academic curriculum with real-world job skills in one dual-track roadmap.
           </p>
           <div className={styles.heroActions}>
             <Link to="/register" className={styles.primaryBtn}>
@@ -54,7 +54,7 @@ const Landing = () => {
       {/* 3. FEATURES GRID */}
       <section className={styles.features}>
         <div className={styles.sectionHeader}>
-          <h2>Why EduNexus?</h2>
+          <h2>Why InsightED?</h2>
           <p>The only platform that adapts to your university schedule.</p>
         </div>
 
@@ -81,7 +81,7 @@ const Landing = () => {
 
       {/* 4. FOOTER */}
       <footer className={styles.footer}>
-        <p>© 2025 EduNexus Project. Built for SIT Pune.</p>
+        <p>© 2025 InsightED Project. Built for SIT Pune.</p>
       </footer>
 
     </div>

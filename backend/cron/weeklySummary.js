@@ -15,8 +15,8 @@ const startWeeklyEmailCron = () => {
     console.log("⏰ Running Weekly AI Study Summary Engine...");
 
     try {
-      // 1. Find all users who have email_notifications turned ON
-      const [users] = await db.execute('SELECT id, name, email FROM users WHERE email_notifications = 1');
+      // 1. Find all users who have email_notifications turned ON// Change this line:
+      const [users] = await db.execute('SELECT id, name, email, parent_email FROM users WHERE email_notifications = 1');
 
       for (const user of users) {
         // 2. Get their stats for the last 7 days
@@ -49,6 +49,7 @@ const startWeeklyEmailCron = () => {
         const mailOptions = {
           from: `"InsightED AI Mentor" <${process.env.EMAIL_USER}>`,
           to: user.email,
+          cc: user.parent_email ? user.parent_email : undefined, // ✅ NEW: CC the parent!
           subject: 'Your Weekly InsightED Study Summary 🚀',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">

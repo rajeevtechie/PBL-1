@@ -16,14 +16,16 @@ const Dashboard = () => {
   
   const [aggregateProgress, setAggregateProgress] = useState({ academic: 0, career: 0, details: [] });
   
-  // ✅ FIXED: Now tracks the open/close state of BOTH cards independently!
   const [expandedTracks, setExpandedTracks] = useState({ academic: false, career: false });
   
   const [metrics, setMetrics] = useState({
     avgFocus: 0,
     consistencyData: [0, 0, 0, 0, 0, 0, 0],
     peakTime: "Analyzing...",
-    peakDesc: "Log a focus session to unlock AI timing insights."
+    peakDesc: "Log a focus session to unlock AI timing insights.",
+    // ✅ NEW: We track how many sessions they've done to handle the cold start
+    // (Change this number to 2 or 5 right here to test the different UI states!)
+    totalSessions: 0
   });
 
   const userName = localStorage.getItem('userName') || 'There';
@@ -36,7 +38,10 @@ const Dashboard = () => {
 
         try {
             const resMetrics = await axios.get('http://localhost:5000/api/insights/dashboard', { headers: { Authorization: `Bearer ${token}` } });
-            if (resMetrics.data.success) setMetrics(resMetrics.data.data);
+            if (resMetrics.data.success) {
+                // Merge backend data with our default state in case totalSessions isn't returned yet
+                setMetrics(prev => ({...prev, ...resMetrics.data.data}));
+            }
         } catch { console.log("No analytics data yet."); }
 
         const activeId = localStorage.getItem('activeSyllabusId');
@@ -98,9 +103,42 @@ const Dashboard = () => {
       displayReason = `Industry gap identified for ${careerData?.targetRole || 'your career goal'}.`;
   }
 
-  // ✅ FIXED: Toggle function perfectly flips independent boolean states
   const toggleTrack = (trackName) => {
       setExpandedTracks(prev => ({ ...prev, [trackName]: !prev[trackName] }));
+  };
+
+  // ✅ NEW: Dynamic logic to handle the Peak Productivity Cold Start Problem
+  const renderPeakProductivity = () => {
+    if (metrics.totalSessions === 0) {
+      return (
+        <div style={{ textAlign: 'center', padding: '10px 0', marginTop: '10px' }}>
+          <h4 style={{ color: 'var(--text-dim)', marginBottom: '8px', fontSize: '1rem' }}>AI Calibrating... ⏳</h4>
+          <p style={{ fontSize: '13px', color: '#888', lineHeight: '1.4' }}>
+            We need to learn your rhythms! Start your first Focus Session to let InsightED discover your peak hours.
+          </p>
+        </div>
+      );
+    } else if (metrics.totalSessions < 4) {
+      return (
+        <div style={{ textAlign: 'center', padding: '10px 0', marginTop: '10px' }}>
+          <h4 style={{ color: '#eab308', marginBottom: '8px', fontSize: '1rem' }}>Gathering Insights... 🧠</h4>
+          <p style={{ fontSize: '13px', color: '#888', lineHeight: '1.4' }}>
+            {metrics.totalSessions}/4 sessions logged. Try studying at different times to map your energy levels!
+          </p>
+          {/* Progress Bar */}
+          <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', marginTop: '12px', overflow: 'hidden' }}>
+            <div style={{ width: `${(metrics.totalSessions / 4) * 100}%`, height: '100%', background: '#eab308', transition: 'width 0.5s ease' }}></div>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div style={{ textAlign: 'center', padding: '10px 0', marginTop: '10px' }}>
+          <div className={styles.flowTime} style={{ color: '#4ade80' }}>{metrics.peakTime} ⚡</div>
+          <p className={styles.flowNote} style={{ marginTop: '8px' }}>{metrics.peakDesc}</p>
+        </div>
+      );
+    }
   };
 
   if (loading) {
@@ -118,8 +156,11 @@ const Dashboard = () => {
         <div className={styles.heroHeader}>
           <span className={styles.heroBadge}>Dynamic Next Task</span>
           
-          <span className={styles.heroUrgency} style={{ color: metrics.peakTime === "Analyzing..." ? '#f59e0b' : '#10b981' }}>
-            {metrics.peakTime !== "Analyzing..." ? `Optimal Focus Window: ${metrics.peakTime}` : "Optimal Focus Window: Not enough data"}
+          {/* ✅ UPDATED: The header badge now accurately reflects the calibration status */}
+          <span className={styles.heroUrgency} style={{ color: metrics.totalSessions >= 4 ? '#10b981' : '#f59e0b' }}>
+            {metrics.totalSessions >= 4 
+              ? `Optimal Focus Window: ${metrics.peakTime}` 
+              : (metrics.totalSessions > 0 ? `AI Calibrating (${metrics.totalSessions}/4)...` : "Optimal Focus Window: Not enough data")}
           </span>
           
           <button 
@@ -242,18 +283,17 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* DYNAMIC FLOW STATE INDICATOR */}
+      {/* ✅ UPDATED: DYNAMIC FLOW STATE INDICATOR */}
       <section className={`${styles.flowCard} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.5s' }}>
          <div className={styles.sectionTitle}><Clock size={18} /> <span>Peak Productivity</span></div>
-         <div className={styles.flowTime}>{metrics.peakTime}</div>
-         <p className={styles.flowNote}>{metrics.peakDesc}</p>
+         {renderPeakProductivity()}
       </section>
 
       {/* AI INSIGHT TEASER */}
       <section className={`${styles.insightCard} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.6s' }}>
          <div className={styles.insightHeader}><span className={styles.aiBadge}>AI Insight</span> <ArrowRight size={16} /></div>
          <p className={styles.insightText}>
-            "{userName}, you are making great progress! Try shifting Deep Work to your {metrics.peakTime !== 'Analyzing...' ? metrics.peakTime.split(' - ')[0] : 'optimal'} slot to maximize retention."
+           "{userName}, you are making great progress! Try shifting Deep Work to your {metrics.peakTime !== 'Analyzing...' ? metrics.peakTime.split(' - ')[0] : 'optimal'} slot to maximize retention."
          </p>
       </section>
 
