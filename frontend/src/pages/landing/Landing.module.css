@@ -254,3 +254,92 @@
   .grid { grid-template-columns: 1fr; }
   .navbar { padding: 1.5rem 2rem; }
 }
+
+/* VIDEO MODAL STYLES */
+.videoOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.9);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+.videoContent {
+  position: relative;
+  /* Change from 90% to 95% to use more screen real estate on smaller displays */
+  width: 95%; 
+  /* Increase max-width from 1000px to 1280px (or even 1400px) */
+  max-width: 1280px; 
+  background: #000;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  
+  /* Add this to ensure it stays centered if you haven't already */
+  margin: auto; 
+}
+
+/* Optional: If you want the video itself to be taller/larger */
+.demoVideo {
+  display: block;
+  width: 100%;
+  /* Ensure it maintains a clean aspect ratio */
+  aspect-ratio: 16 / 9; 
+  border-radius: 0 0 16px 16px;
+  object-fit: contain; /* Keeps the whole video visible without cropping */
+}
+
+.videoWrapper {
+  width: 100%;
+  line-height: 0;
+}
+
+.demoVideo {
+  display: block;
+  width: 100%;
+  border-radius: 0 0 16px 16px;
+}
+
+.closeVideo {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  padding: 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 1010;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeVideo:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Ensure the secondary button looks clickable */
+.secondaryBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}

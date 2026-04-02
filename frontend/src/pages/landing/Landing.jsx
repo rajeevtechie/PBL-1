@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, Target, Zap, BarChart2 } from 'lucide-react';
+import { ArrowRight, BookOpen, Target, Zap, BarChart2, X, Play } from 'lucide-react';
 import styles from './Landing.module.css';
 
 const Landing = () => {
+  const [isVideoOpen, setIsVideoOpen] = useState(false);
+
   return (
     <div className={styles.landingContainer}>
       
@@ -33,11 +35,13 @@ const Landing = () => {
             <Link to="/register" className={styles.primaryBtn}>
               Start Your Journey <ArrowRight size={20} />
             </Link>
-            <button className={styles.secondaryBtn}>View Demo</button>
+            {/* Added onClick to open the video */}
+            <button className={styles.secondaryBtn} onClick={() => setIsVideoOpen(true)}>
+               <Play size={16} style={{ marginRight: '8px', display: 'inline' }} /> View Demo
+            </button>
           </div>
         </div>
         
-        {/* Abstract Visual Representation of "Bridging the Gap" */}
         <div className={styles.heroVisual}>
           <div className={styles.floatingCard} style={{ top: '20%', left: '10%' }}>
             <BookOpen size={24} color="#6366f1" />
@@ -84,6 +88,22 @@ const Landing = () => {
         <p>© 2025 InsightED Project. Built for SIT Pune.</p>
       </footer>
 
+      {/* --- VIDEO DEMO MODAL --- */}
+      {isVideoOpen && (
+        <div className={styles.videoOverlay} onClick={() => setIsVideoOpen(false)}>
+          <div className={styles.videoContent} onClick={(e) => e.stopPropagation()}>
+            <button className={styles.closeVideo} onClick={() => setIsVideoOpen(false)}>
+              <X size={24} />
+            </button>
+            <div className={styles.videoWrapper}>
+              <video width="100%" controls autoPlay className={styles.demoVideo}>
+                <source src="/videos/insighted_demo.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
