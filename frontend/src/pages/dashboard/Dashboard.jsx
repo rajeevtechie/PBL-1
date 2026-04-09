@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios'; 
 import UploadModal from '../../Components/common/UploadModal/UploadModal'; 
 import SubjectLibrary from '../../Components/common/SubjectLibrary/SubjectLibrary';
+import ActivityGraph from '../../Components/common/Heatmap/ActivityGraph';
 import styles from './Dashboard.module.css';
 
 const Dashboard = () => {
@@ -15,7 +16,6 @@ const Dashboard = () => {
   const [careerData, setCareerData] = useState(null);
   
   const [aggregateProgress, setAggregateProgress] = useState({ academic: 0, career: 0, details: [] });
-  
   const [expandedTracks, setExpandedTracks] = useState({ academic: false, career: false });
   
   const [metrics, setMetrics] = useState({
@@ -23,8 +23,6 @@ const Dashboard = () => {
     consistencyData: [0, 0, 0, 0, 0, 0, 0],
     peakTime: "Analyzing...",
     peakDesc: "Log a focus session to unlock AI timing insights.",
-    // ✅ NEW: We track how many sessions they've done to handle the cold start
-    // (Change this number to 2 or 5 right here to test the different UI states!)
     totalSessions: 0
   });
 
@@ -39,7 +37,6 @@ const Dashboard = () => {
         try {
             const resMetrics = await axios.get('http://localhost:5000/api/insights/dashboard', { headers: { Authorization: `Bearer ${token}` } });
             if (resMetrics.data.success) {
-                // Merge backend data with our default state in case totalSessions isn't returned yet
                 setMetrics(prev => ({...prev, ...resMetrics.data.data}));
             }
         } catch { console.log("No analytics data yet."); }
@@ -107,7 +104,6 @@ const Dashboard = () => {
       setExpandedTracks(prev => ({ ...prev, [trackName]: !prev[trackName] }));
   };
 
-  // ✅ NEW: Dynamic logic to handle the Peak Productivity Cold Start Problem
   const renderPeakProductivity = () => {
     if (metrics.totalSessions === 0) {
       return (
@@ -125,7 +121,6 @@ const Dashboard = () => {
           <p style={{ fontSize: '13px', color: '#888', lineHeight: '1.4' }}>
             {metrics.totalSessions}/4 sessions logged. Try studying at different times to map your energy levels!
           </p>
-          {/* Progress Bar */}
           <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', marginTop: '12px', overflow: 'hidden' }}>
             <div style={{ width: `${(metrics.totalSessions / 4) * 100}%`, height: '100%', background: '#eab308', transition: 'width 0.5s ease' }}></div>
           </div>
@@ -156,7 +151,6 @@ const Dashboard = () => {
         <div className={styles.heroHeader}>
           <span className={styles.heroBadge}>Dynamic Next Task</span>
           
-          {/* ✅ UPDATED: The header badge now accurately reflects the calibration status */}
           <span className={styles.heroUrgency} style={{ color: metrics.totalSessions >= 4 ? '#10b981' : '#f59e0b' }}>
             {metrics.totalSessions >= 4 
               ? `Optimal Focus Window: ${metrics.peakTime}` 
@@ -268,33 +262,69 @@ const Dashboard = () => {
         )}
       </section>
 
-      {/* DYNAMIC CONSISTENCY GRAPH */}
-      <section className={`${styles.consistencySection} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.4s' }}>
-        <div className={styles.sectionTitle}><TrendingUp size={18} /> <span>Focus & Consistency</span></div>
-        <div className={styles.statsRow}>
-          <div className={styles.statItem}><span className={styles.statValue}>{metrics.avgFocus}%</span> <span className={styles.statLabel}>Avg Focus</span></div>
-          <div className={styles.statItem}><span className={styles.statValue}>{metrics.consistencyData.filter(d => d > 0).length} / 7</span> <span className={styles.statLabel}>Active Days</span></div>
-        </div>
-        <div className={styles.graphPlaceholder}>
-           {metrics.consistencyData.map((level, i) => {
-             const heights = ['10%', '35%', '60%', '85%', '100%'];
-             return <div key={i} className={styles.bar} style={{ height: heights[level], opacity: level === 0 ? 0.2 : 0.6 + (level * 0.1), transition: 'height 1s cubic-bezier(0.4, 0, 0.2, 1), opacity 1s ease' }}></div>;
-           })}
-        </div>
-      </section>
+      {/* --- DYNAMIC ROW: AI INSIGHT & PEAK PRODUCTIVITY --- */}
+      <div 
+        style={{ 
+          display: 'flex', 
+          gap: '24px', 
+          gridColumn: '1 / -1', 
+          width: '100%',
+          alignItems: 'stretch' 
+        }}
+        className={styles.animateFadeInUp || ''}
+      >
+        {/* AI INSIGHT TEASER (Clickable to Insights Page) */}
+        <section 
+          className={styles.insightCard} 
+          onClick={() => navigate('/insights')}
+          style={{ 
+            animationDelay: '0.5s', 
+            flex: '2', 
+            margin: 0, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'center',
+            cursor: 'pointer'
+          }}
+          title="View full AI Insights"
+        >
+           <div className={styles.insightHeader}>
+             <span className={styles.aiBadge}>AI Insight</span> <ArrowRight size={16} />
+           </div>
+           <p className={styles.insightText}>
+             "{userName}, you are making great progress! Try shifting Deep Work to your {metrics.peakTime !== 'Analyzing...' ? metrics.peakTime.split(' - ')[0] : 'optimal'} slot to maximize retention."
+           </p>
+        </section>
 
-      {/* ✅ UPDATED: DYNAMIC FLOW STATE INDICATOR */}
-      <section className={`${styles.flowCard} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.5s' }}>
-         <div className={styles.sectionTitle}><Clock size={18} /> <span>Peak Productivity</span></div>
-         {renderPeakProductivity()}
-      </section>
+        {/* FLOW STATE INDICATOR */}
+        <section 
+          className={styles.flowCard} 
+          style={{ animationDelay: '0.6s', flex: '1', margin: 0 }}
+        >
+           <div className={styles.sectionTitle}><Clock size={18} /> <span>Peak Productivity</span></div>
+           {renderPeakProductivity()}
+        </section>
+      </div>
 
-      {/* AI INSIGHT TEASER */}
-      <section className={`${styles.insightCard} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.6s' }}>
-         <div className={styles.insightHeader}><span className={styles.aiBadge}>AI Insight</span> <ArrowRight size={16} /></div>
-         <p className={styles.insightText}>
-           "{userName}, you are making great progress! Try shifting Deep Work to your {metrics.peakTime !== 'Analyzing...' ? metrics.peakTime.split(' - ')[0] : 'optimal'} slot to maximize retention."
-         </p>
+      {/* DYNAMIC CONSISTENCY GRAPH & HEATMAP */}
+      <section className={`${styles.consistencySection} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.4s', gridColumn: '1 / -1', width: '100%' }}>
+        <div className={styles.sectionTitle} style={{ marginBottom: '16px' }}>
+            <TrendingUp size={18} /> <span>Focus & Consistency</span>
+        </div>
+        
+        <div className={styles.statsRow} style={{ marginBottom: '24px' }}>
+          <div className={styles.statItem}>
+              <span className={styles.statValue}>{metrics.avgFocus}%</span> 
+              <span className={styles.statLabel}>Avg Focus</span>
+          </div>
+          <div className={styles.statItem}>
+              <span className={styles.statValue}>{metrics.totalSessions}</span> 
+              <span className={styles.statLabel}>Total Sessions</span>
+          </div>
+        </div>
+
+        <ActivityGraph />
+        
       </section>
 
       <UploadModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onComplete={handleRoadmapReady} />
