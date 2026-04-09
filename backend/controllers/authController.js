@@ -1,86 +1,155 @@
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 require('dotenv').config();
 
-// --- REGISTER USER ---
+// --- 1. REGISTER NEW USER ---
 exports.register = async (req, res) => {
     try {
-        // Note: We extract name, email, and password from the frontend request.
-        // Even if your frontend sends 'university', we are only saving what is in your DB schema.
         const { name, email, password } = req.body;
 
-        if (!name || !email || !password) {
-            return res.status(400).json({ message: "Please provide all required fields." });
+        // 🛡️ SECURITY: Strict Input Validation
+        const nameRegex = /^[a-zA-Z\s]+$/; // Letters and spaces only
+        if (!name || !nameRegex.test(name)) {
+            return res.status(400).json({ message: "Name must contain only letters and spaces." });
         }
 
-        // 1. Check if user already exists
-        const [existingUsers] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-        if (existingUsers.length > 0) {
-            return res.status(400).json({ message: "User already exists with this email." });
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Standard email format
+        if (!email || !emailRegex.test(email)) {
+            return res.status(400).json({ message: "Please enter a valid email address." });
         }
 
-        // 2. Hash the password for security
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        if (!password || password.length < 8) {
+            return res.status(400).json({ message: "Password must be at least 8 characters long." });
+        }
 
-        // 3. Save user to database (Using 'password_hash' column)
+        // Check if user already exists
+        const [existingUser] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+        if (existingUser.length > 0) {
+            return res.status(400).json({ message: "Email is already registered." });
+        }
+
+        // 🛡️ SECURITY: Hash password with 12 salt rounds (Optimal balance of speed/security)
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        // Insert into database
         const [result] = await db.execute(
-            'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
-            [name, email, hashedPassword]
+            'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
+            [name, email, hashedPassword, 'student']
         );
 
-        // 4. Generate JWT Token
-        const token = jwt.sign({ id: result.insertId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        // Generate JWT Token
+        const token = jwt.sign(
+            { id: result.insertId, role: 'student' },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' } // Token lasts 7 days
+        );
+
+        // 🛡️ SECURITY: Send token via HttpOnly Cookie (Invisible to JS/Hackers)
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', 
+            sameSite: 'strict', 
+            maxAge: 7 * 24 * 60 * 60 * 1000 
+        });
 
         res.status(201).json({
-            message: "Account created successfully",
-            token,
-            user: { id: result.insertId, name, email }
+            success: true,
+            message: "Registration successful",
+            user: { id: result.insertId, name, email, role: 'student' }
         });
 
     } catch (error) {
-        console.error("❌ Registration Error:", error);
-        res.status(500).json({ message: "Server error during registration", error: error.message });
+        console.error("Register Error:", error);
+        res.status(500).json({ message: "Internal server error." });
     }
 };
 
-// --- LOGIN USER ---
+// --- 2. LOGIN EXISTING USER ---
 exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        if (!email || !password) {
-            return res.status(400).json({ message: "Please provide email and password." });
-        }
-
-        // 1. Find user by email
+        // Fetch user from DB
         const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-        
         if (users.length === 0) {
-            return res.status(401).json({ message: "Invalid email or password." });
+            return res.status(400).json({ message: "Invalid email or password." });
         }
 
         const user = users[0];
 
-        // 2. Compare passwords (✅ FIXED: Now correctly pointing to user.password_hash)
+        // Verify Password
         const isMatch = await bcrypt.compare(password, user.password_hash);
-        
         if (!isMatch) {
-            return res.status(401).json({ message: "Invalid email or password." });
+            return res.status(400).json({ message: "Invalid email or password." });
         }
 
-        // 3. Generate JWT Token
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        // Generate JWT Token
+        const token = jwt.sign(
+            { id: user.id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        // 🛡️ SECURITY: Send token via HttpOnly Cookie
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
 
         res.status(200).json({
+            success: true,
             message: "Login successful",
-            token,
-            user: { id: user.id, name: user.name, email: user.email }
+            user: { id: user.id, name: user.name, email: user.email, role: user.role }
         });
 
     } catch (error) {
-        console.error("❌ Login Error:", error);
-        res.status(500).json({ message: "Server error during login", error: error.message });
+        console.error("Login Error:", error);
+        res.status(500).json({ message: "Internal server error." });
     }
+};
+
+// --- 3. GUEST LOGIN (DEMO MODE) ---
+exports.guestLogin = async (req, res) => {
+    try {
+        const guestId = 4; // Your specific guest user ID in the database
+        
+        // 🛡️ We explicitly add role: 'guest' so we can restrict them later
+        const token = jwt.sign(
+            { id: guestId, role: 'guest' }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '1h' } // Guest tokens only last 1 hour
+        );
+        
+        // Send cookie
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 60 * 60 * 1000 // 1 hour
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Logged in as Guest",
+            user: { id: guestId, name: "Guest Student", email: "guest@insighted.com", role: "guest" }
+        });
+    } catch (error) {
+        console.error("Guest Login Error:", error);
+        res.status(500).json({ message: "Guest access failed." });
+    }
+};
+
+// --- 4. LOGOUT ---
+// Because JS can't delete HttpOnly cookies, the server must clear it!
+exports.logout = (req, res) => {
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict'
+    });
+    
+    res.status(200).json({ success: true, message: "Logged out successfully" });
 };

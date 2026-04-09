@@ -4,7 +4,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 require("dotenv").config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-// ✅ OPTIMIZATION: Pointing to the specific, stable 1.5-flash model to avoid 503 errors
+// Pointing to the stable 1.5-flash model
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // --- 1. DASHBOARD ANALYTICS ---
@@ -16,7 +16,7 @@ exports.getDashboardAnalytics = async (req, res, next) => {
             return res.status(401).json({ message: "Unauthorized" });
         }
 
-        // 1. Fetch all completed study sessions for this user
+        // Fetch all completed study sessions for this user
         const [sessions] = await db.execute(
             'SELECT start_time, duration_minutes, focus_score FROM study_sessions WHERE user_id = ? ORDER BY start_time DESC',
             [userId]
@@ -24,7 +24,7 @@ exports.getDashboardAnalytics = async (req, res, next) => {
 
         const totalSessions = sessions.length;
 
-        // 2. THE COLD START: If they have no data, send the defaults!
+        // THE COLD START: If they have no data, send the defaults
         if (totalSessions === 0) {
             return res.status(200).json({
                 success: true,
@@ -38,11 +38,11 @@ exports.getDashboardAnalytics = async (req, res, next) => {
             });
         }
 
-        // 3. CALCULATE AGGREGATES
+        // CALCULATE AGGREGATES
         const totalFocusScore = sessions.reduce((acc, curr) => acc + (curr.focus_score || 0), 0);
         const avgFocus = Math.round(totalFocusScore / totalSessions);
 
-        // 4. CALCULATE CONSISTENCY HEATMAP (Last 7 Days)
+        // CALCULATE CONSISTENCY HEATMAP (Last 7 Days)
         const dailySessions = [0, 0, 0, 0, 0, 0, 0]; // Index 6 is Today, Index 0 is 6 days ago
         const today = new Date();
         today.setHours(23, 59, 59, 999);
@@ -54,34 +54,28 @@ exports.getDashboardAnalytics = async (req, res, next) => {
             
             if (diffDays >= 0 && diffDays <= 6) {
                 const index = 6 - diffDays;
-                // Count the number of sessions per day
                 dailySessions[index] += 1; 
             }
         });
 
-        // Normalize the graph data so it looks good on the frontend (Scale 0 to 4)
         const maxSessionsInADay = Math.max(...dailySessions, 1);
         const consistencyData = dailySessions.map(count => {
             if (count === 0) return 0;
-            // Spread the bar heights evenly based on their max day
             return Math.ceil((count / maxSessionsInADay) * 4); 
         });
 
-        // 5. CALCULATE PEAK PRODUCTIVITY WINDOW
+        // CALCULATE PEAK PRODUCTIVITY WINDOW
         let peakTime = "Analyzing...";
         let peakDesc = "Study more to unlock AI timing insights.";
         
-        // We only calculate a peak window if they've done at least 4 sessions
         if (totalSessions >= 4) {
             const hourCounts = new Array(24).fill(0);
             
             sessions.forEach(session => {
                 const hour = new Date(session.start_time).getHours();
-                // Weight the hour by both duration and how focused you were
                 hourCounts[hour] += (session.duration_minutes * ((session.focus_score || 50) / 100));
             });
 
-            // Find the best hour
             let bestHour = 0;
             let maxScore = 0;
             for (let i = 0; i < 24; i++) {
@@ -91,7 +85,6 @@ exports.getDashboardAnalytics = async (req, res, next) => {
                 }
             }
 
-            // Format it nicely (e.g., "10 PM - 1 AM")
             const formatHour = (h) => {
                 const ampm = h >= 12 ? 'PM' : 'AM';
                 let formatted = h % 12;
@@ -99,7 +92,7 @@ exports.getDashboardAnalytics = async (req, res, next) => {
                 return `${formatted} ${ampm}`;
             };
 
-            const endHour = (bestHour + 3) % 24; // 3 hour window
+            const endHour = (bestHour + 3) % 24; 
             peakTime = `${formatHour(bestHour)} - ${formatHour(endHour)}`;
             
             if (bestHour >= 5 && bestHour < 12) peakDesc = "Your brain is highly active in the morning. Schedule hard subjects here!";
@@ -108,7 +101,6 @@ exports.getDashboardAnalytics = async (req, res, next) => {
             else peakDesc = "Your brain is most active at night. Avoid distractions and dive deep.";
         }
 
-        // 6. Send the Live Data to React!
         res.status(200).json({
             success: true,
             data: {
@@ -125,6 +117,7 @@ exports.getDashboardAnalytics = async (req, res, next) => {
         res.status(500).json({ success: false, message: "Failed to generate insights." });
     }
 };
+
 
 // --- 2. AI MENTOR CHAT ---
 exports.chatWithMentor = async (req, res, next) => {
@@ -153,4 +146,49 @@ exports.chatWithMentor = async (req, res, next) => {
     console.error("AI Chat Error:", error);
     res.status(500).json({ reply: "Sorry, my servers are taking a quick nap. Try again in a moment!" });
   }
+};
+
+
+// --- 3. ACTIVITY HEATMAP (GITHUB/LEETCODE STYLE) ---
+exports.getActivityHeatmap = async (req, res) => {
+    try {
+        const userId = req.user?.id || req.userId;
+
+        // Fetch ALL sessions for the user (No 1-year limit!) so the frontend can filter by year
+        const [sessions] = await db.execute(`
+            SELECT 
+                DATE(start_time) as active_date, 
+                COUNT(*) as total_sessions, 
+                SUM(duration_minutes) as total_minutes
+            FROM study_sessions 
+            WHERE user_id = ? 
+            GROUP BY DATE(start_time)
+            ORDER BY active_date ASC
+        `, [userId]);
+
+        // Format the data for the react-activity-calendar
+        const heatmapData = sessions.map(row => {
+            const totalMins = row.total_minutes;
+            
+            // Determine how "bright" the green square should be (Scale 1-4)
+            let intensityLevel = 1; // Light green (Under 30 mins)
+            if (totalMins >= 30) intensityLevel = 2; // Medium (30-60 mins)
+            if (totalMins >= 60) intensityLevel = 3; // High (1-2 hours)
+            if (totalMins >= 120) intensityLevel = 4; // Intense (2+ hours)
+
+            // MySQL returns dates with timezones, we just need YYYY-MM-DD
+            const dateStr = new Date(row.active_date).toISOString().split('T')[0];
+
+            return {
+                date: dateStr,
+                count: totalMins, // Used for the hover tooltip 
+                level: intensityLevel
+            };
+        });
+
+        res.status(200).json({ success: true, data: heatmapData });
+    } catch (error) {
+        console.error("Heatmap Error:", error);
+        res.status(500).json({ success: false, message: "Failed to load heatmap data" });
+    }
 };
