@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { 
   LayoutDashboard, 
   Map, 
@@ -20,9 +21,19 @@ const Sidebar = () => {
     navigate('/dashboard');
   };
 
-  const handleLogout = () => {
-    // Logic to clear session can go here
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      // 1. Tell the backend to destroy the secure HttpOnly cookie
+      await axios.post('http://localhost:5000/api/auth/logout', {}, { withCredentials: true });
+    } catch (error) {
+      console.error("Backend logout failed, but clearing local session anyway.", error);
+    } finally {
+      // 2. 🛡️ Nuke the browser memory (This forces the tours to reset for the next user!)
+      localStorage.clear();
+      
+      // 3. Send them back to the login page
+      navigate('/login');
+    }
   };
 
   return (

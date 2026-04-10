@@ -199,22 +199,33 @@ const Dashboard = () => {
         callback={handleTourCallback}
         styles={{
           options: {
-            arrowColor: '#1e293b',
-            backgroundColor: '#1e293b',
+            arrowColor: '#1e293b', 
             overlayColor: 'rgba(15, 23, 42, 0.85)',
             primaryColor: '#6366f1',
-            textColor: '#f8fafc',
             zIndex: 1000,
+          },
+          tooltip: {
+            backgroundColor: '#1e293b', /* 🛡️ Explicitly force dark background */
+            borderRadius: '12px',
+            border: '1px solid #334155',
+            color: '#f8fafc',           /* 🛡️ Explicitly force white text */
+            padding: '20px'
+          },
+          tooltipContainer: {
+            textAlign: 'left'
           },
           buttonNext: {
             backgroundColor: '#6366f1',
             borderRadius: '8px',
-            fontSize: '0.9rem',
-            padding: '8px 16px'
+            color: '#ffffff',
+            fontWeight: '600',
+            padding: '8px 16px',
+            border: 'none',
+            outline: 'none'
           },
           buttonBack: {
             color: '#cbd5e1',
-            marginRight: '8px'
+            marginRight: '10px'
           },
           buttonSkip: {
             color: '#64748b'
