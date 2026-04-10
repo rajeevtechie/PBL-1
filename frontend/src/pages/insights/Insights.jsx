@@ -1,25 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Lightbulb, TrendingUp, AlertTriangle, ArrowRight, Send, Loader2, CheckCircle } from 'lucide-react';
+import { Lightbulb, TrendingUp, AlertTriangle, ArrowRight, Send, Loader2, CheckCircle, Sparkles } from 'lucide-react';
 import styles from './Insights.module.css';
 
 const Insights = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   
-  // --- LIVE DATA STATE ---
   const [metrics, setMetrics] = useState({
     avgFocus: 0,
+    totalSessions: 0, // Added this to track if user is new!
     peakTime: "Analyzing...",
     peakDesc: "Log a focus session to unlock AI timing insights."
   });
   const [recommendations, setRecommendations] = useState([]);
 
-  // Extract the user's first name for a personalized greeting
   const firstName = (localStorage.getItem('userName') || 'There').split(' ')[0];
 
-  // --- INTERACTIVE CHAT STATE ---
   const [chatMessages, setChatMessages] = useState([
     { sender: 'ai', text: `Hello ${firstName}! I am your InsightED AI Mentor. Based on your recent dashboard analytics, how can I help you optimize your study sessions today?`, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
   ]);
@@ -27,17 +25,12 @@ const Insights = () => {
   const [isAiTyping, setIsAiTyping] = useState(false);
   const chatEndRef = useRef(null);
 
-  // --- FETCH REAL DATA ON MOUNT ---
   useEffect(() => {
     const fetchInsightsData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        // Fetch Dashboard Insights & Career Recommendations simultaneously
         const [resMetrics, resCareer] = await Promise.all([
-          axios.get('http://localhost:5000/api/insights/dashboard', { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: { data: null } })),
-          axios.get('http://localhost:5000/api/syllabus/career-insights?syllabusId=latest', { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: { recommendations: [] } }))
+          axios.get('http://localhost:5000/api/insights/dashboard').catch(() => ({ data: { data: null } })),
+          axios.get('http://localhost:5000/api/syllabus/career-insights?syllabusId=latest').catch(() => ({ data: { recommendations: [] } }))
         ]);
 
         if (resMetrics.data?.success && resMetrics.data?.data) {
@@ -58,13 +51,10 @@ const Insights = () => {
     fetchInsightsData();
   }, []);
 
-  // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isAiTyping]);
 
-  // --- ✅ NEW: DYNAMIC AI CHAT HANDLER ---
-  // --- ✅ GOD-MODE: DYNAMIC AI CHAT HANDLER ---
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!currentInput.trim()) return;
@@ -77,17 +67,11 @@ const Insights = () => {
     setIsAiTyping(true);
 
     try {
-      const token = localStorage.getItem('token');
-      
-      // ✅ We are now passing the Name and Focus Score to the backend!
-      const res = await axios.post('http://localhost:5000/api/insights/chat', 
-        { 
+      const res = await axios.post('http://localhost:5000/api/insights/chat', { 
           message: userText,
           userName: firstName,
           currentFocus: metrics.avgFocus
-        }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      });
 
       const aiResponse = { 
         sender: 'ai', 
@@ -115,21 +99,28 @@ const Insights = () => {
     );
   }
 
-  // --- DYNAMIC ALERT LOGIC ---
   const isFocusLow = metrics.avgFocus > 0 && metrics.avgFocus < 60;
 
   return (
     <div className={styles.insightsContainer}>
-      
-      {/* LEFT COLUMN: The Analysis Feed */}
       <div className={styles.feedColumn}>
         <header className={`${styles.header} ${styles.animateFadeInUp}`}>
           <h1>AI Growth Engine</h1>
           <p>Real-time analysis of your learning patterns.</p>
         </header>
 
-        {/* 1. DYNAMIC ALERT CARD */}
-        {isFocusLow ? (
+        {/* FIX: If totalSessions is 0, show a welcome card instead of fake praise! */}
+        {metrics.totalSessions === 0 ? (
+           <div className={`${styles.insightCard} ${styles.opportunity} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.1s' }}>
+             <div className={styles.cardHeader}>
+               <div className={styles.iconBox}><Sparkles size={20} /></div>
+               <h3>Welcome to InsightED!</h3>
+             </div>
+             <p>
+               Your AI analytics engine is currently calibrating. Head over to the <strong>Focus Mode</strong> and complete your first session to unlock personalized retention insights.
+             </p>
+           </div>
+        ) : isFocusLow ? (
           <div className={`${styles.insightCard} ${styles.critical} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.1s' }}>
             <div className={styles.cardHeader}>
               <div className={styles.iconBox}><AlertTriangle size={20} /></div>
@@ -154,7 +145,6 @@ const Insights = () => {
           </div>
         )}
 
-        {/* 2. LIVE PEAK PERFORMANCE CARD */}
         <div className={`${styles.insightCard} ${styles.opportunity} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.2s' }}>
           <div className={styles.cardHeader}>
             <div className={styles.iconBox}><TrendingUp size={20} /></div>
@@ -166,7 +156,6 @@ const Insights = () => {
           </p>
         </div>
 
-        {/* 3. DYNAMIC CAREER TRACK OR PROPER EMPTY STATE */}
         <div className={`${styles.insightCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.3s' }}>
           <div className={styles.cardHeader}>
             <div className={styles.iconBox}><Lightbulb size={20} /></div>
@@ -203,7 +192,6 @@ const Insights = () => {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: INTERACTIVE AI MENTOR CHAT */}
       <div className={`${styles.chatColumn} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.4s' }}>
         <div className={styles.chatHeader}>
           <h3>InsightED AI Mentor</h3>

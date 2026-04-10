@@ -35,10 +35,10 @@ const Login = () => {
         formData
       );
 
-      localStorage.setItem('token', res.data.token);
+      // 🧹 SECURE CLEANUP: The token is now safely inside the HttpOnly Cookie!
+      // We no longer save the token here. We only save basic UI data.
       localStorage.setItem('user', JSON.stringify(res.data.user));
       
-      // Save userName globally so Settings & Insights can use it
       if (res.data.user?.name) {
           localStorage.setItem('userName', res.data.user.name);
       }
@@ -137,7 +137,6 @@ const Login = () => {
               </button>
             </div>
 
-            {/* THE FIX: Flexbox Options Row */}
             <div className={styles.options}>
               <label className={styles.checkbox}>
                 <input type="checkbox" /> 

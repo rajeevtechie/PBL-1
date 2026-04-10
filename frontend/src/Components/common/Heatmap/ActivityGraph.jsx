@@ -7,7 +7,6 @@ const ActivityGraph = () => {
     const [displayData, setDisplayData] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // Stats State
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [availableYears, setAvailableYears] = useState([new Date().getFullYear()]);
     const [stats, setStats] = useState({ totalActive: 0, maxStreak: 0, currentStreak: 0 });
@@ -15,10 +14,8 @@ const ActivityGraph = () => {
     useEffect(() => {
         const fetchHeatmap = async () => {
             try {
-                const token = localStorage.getItem('token');
-                const res = await axios.get('http://localhost:5000/api/insights/heatmap', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                // 🧹 CLEANUP: No token or headers required here either!
+                const res = await axios.get('http://localhost:5000/api/insights/heatmap');
 
                 if (res.data.success && res.data.data && res.data.data.length > 0) {
                     setRawData(res.data.data);
@@ -39,11 +36,9 @@ const ActivityGraph = () => {
         fetchHeatmap();
     }, []);
 
-    // Filter data whenever the year changes
     useEffect(() => {
         if (loading) return;
 
-        // ✅ FIX 1: ALWAYS anchor from Jan 1 to Dec 31 to force a full-width grid
         const startDateStr = `${selectedYear}-01-01`;
         const endDateStr = `${selectedYear}-12-31`;
         
@@ -120,7 +115,6 @@ const ActivityGraph = () => {
             overflowX: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            // ✅ FIX 2: Align everything to the left
             alignItems: 'flex-start' 
         }}>
             <div style={{ 
@@ -160,7 +154,6 @@ const ActivityGraph = () => {
                 </select>
             </div>
             
-            {/* ✅ FIX 3: Make the calendar wrapper stick to the left */}
             <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-start', overflowX: 'auto', paddingBottom: '10px' }}>
                 <ActivityCalendar 
                     data={displayData} 

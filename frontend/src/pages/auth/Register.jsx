@@ -48,14 +48,21 @@ const Register = () => {
     setLoading(true);
 
     try {
-      await axios.post('http://localhost:5000/api/auth/register', {
+      const res = await axios.post('http://localhost:5000/api/auth/register', {
         name: formData.name,
         email: formData.email,
         password: formData.password
       });
       
-      alert("Account created! Please login.");
-      navigate('/login');
+      // 🧹 SECURE CLEANUP: Token is securely handled via cookies automatically!
+      // Because our backend sends the cookie immediately on register, 
+      // we can save their UI data and push them straight to the dashboard!
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      if (res.data.user?.name) {
+          localStorage.setItem('userName', res.data.user.name);
+      }
+      
+      navigate('/dashboard');
 
     } catch (err) {
       console.error(err);
@@ -165,7 +172,6 @@ const Register = () => {
               />
             </div>
 
-            {/* PERFECTLY ALIGNED TERMS ROW */}
             <div className={styles.terms}>
               <label className={styles.checkbox}>
                 <input 
@@ -182,7 +188,6 @@ const Register = () => {
               </label>
             </div>
 
-            {/* DYNAMIC LOADING BUTTON */}
             <button 
               type="submit" 
               className={styles.submitBtn} 

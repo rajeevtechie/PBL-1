@@ -1,4 +1,3 @@
-// backend/controllers/insightController.js
 const db = require('../config/db');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 require("dotenv").config();
@@ -7,7 +6,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // Pointing to the stable 1.5-flash model
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// --- 1. DASHBOARD ANALYTICS ---
+// --- 1. DASHBOARD & ANALYTICS DATA ---
 exports.getDashboardAnalytics = async (req, res, next) => {
     try {
         const userId = req.user?.id || req.userId;
@@ -16,7 +15,7 @@ exports.getDashboardAnalytics = async (req, res, next) => {
             return res.status(401).json({ message: "Unauthorized" });
         }
 
-        // Fetch all completed study sessions for this user
+        // A. Fetch all completed study sessions for this user
         const [sessions] = await db.execute(
             'SELECT start_time, duration_minutes, focus_score FROM study_sessions WHERE user_id = ? ORDER BY start_time DESC',
             [userId]
@@ -33,7 +32,8 @@ exports.getDashboardAnalytics = async (req, res, next) => {
                     avgFocus: 0,
                     consistencyData: [0, 0, 0, 0, 0, 0, 0],
                     peakTime: "Analyzing...",
-                    peakDesc: "Log a focus session to unlock AI timing insights."
+                    peakDesc: "Log a focus session to unlock AI timing insights.",
+                    studyVelocity: 1.0 // Default velocity
                 }
             });
         }
@@ -101,6 +101,29 @@ exports.getDashboardAnalytics = async (req, res, next) => {
             else peakDesc = "Your brain is most active at night. Avoid distractions and dive deep.";
         }
 
+        // ✅ B. CALCULATE ACTUAL STUDY VELOCITY FROM TASKS
+        const [completedTasks] = await db.execute(
+            'SELECT estimated_minutes, actual_minutes FROM tasks WHERE user_id = ? AND status = "completed" AND actual_minutes > 0',
+            [userId]
+        );
+        
+        let studyVelocity = 1.0; 
+        if (completedTasks.length > 0) {
+            let totalEst = 0;
+            let totalAct = 0;
+            completedTasks.forEach(t => {
+                totalEst += t.estimated_minutes;
+                totalAct += t.actual_minutes;
+            });
+            
+            // If estimated was 60 and actual was 50 -> 60/50 = 1.2x velocity!
+            // We cap it at 3.0x so the UI doesn't break if they finish a 60 min task in 1 min.
+            let rawVelocity = totalEst / totalAct;
+            if (rawVelocity > 3.0) rawVelocity = 3.0; 
+            
+            studyVelocity = parseFloat(rawVelocity.toFixed(1));
+        }
+
         res.status(200).json({
             success: true,
             data: {
@@ -108,7 +131,8 @@ exports.getDashboardAnalytics = async (req, res, next) => {
                 avgFocus,
                 consistencyData,
                 peakTime,
-                peakDesc
+                peakDesc,
+                studyVelocity // 👈 Velocity is now sent to the frontend!
             }
         });
 
