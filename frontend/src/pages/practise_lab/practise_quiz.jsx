@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Square, CheckCircle, Clock, Save, RefreshCw } from 'lucide-react'; 
 import axios from 'axios';
+import { Joyride, STATUS } from 'react-joyride';
 import styles from './practise_lab.module.css';
 
 const RESULTS_KEY = 'practiceQuizResults';
@@ -28,9 +29,8 @@ const PractiseQuiz = () => {
   const [contentTitleError, setContentTitleError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
 
-  // Load the correct timer setting from the previous page
   const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-  const initialTime = settings.timerEnabled ? (settings.timerDuration || 25) : 0; // 0 if disabled
+  const initialTime = settings.timerEnabled ? (settings.timerDuration || 25) : 0; 
 
   const [targetMinutes, setTargetMinutes] = useState(initialTime);
   const [remainingSeconds, setRemainingSeconds] = useState(initialTime * 60);
@@ -42,22 +42,51 @@ const PractiseQuiz = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(null);
 
-  const modeMap = {
-    'Quiz (MCQ)': 'quiz',
-    'Short Answer': 'short',
-    'Long Answer': 'long',
-    'Case Study': 'case',
-    'Mock Test': 'mock',
-    'Study Notes': 'notes'
-  };
+  // --- 🪄 TOUR STATE ---
+  const [runTour, setRunTour] = useState(false);
+  const tourSteps = [
+    {
+      target: '#tour-quiz-timer',
+      content: (
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Focus Engine Active ⏱️</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>Your session is being tracked! Completing this test will log your focus time and score straight to your Analytics dashboard.</p>
+        </div>
+      ),
+      disableBeacon: true,
+    },
+    {
+      target: '#tour-quiz-actions',
+      content: (
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>AI Evaluation 📝</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>When you are finished, hit Submit. The AI will instantly grade your answers and explain any mistakes!</p>
+        </div>
+      ),
+    }
+  ];
+
+  const modeMap = { 'Quiz (MCQ)': 'quiz', 'Short Answer': 'short', 'Long Answer': 'long', 'Case Study': 'case', 'Mock Test': 'mock', 'Study Notes': 'notes' };
 
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem(RESULTS_KEY) || '[]');
-    setItems(normalizeStoredResults(stored, settings.mode));
+    const loadedItems = normalizeStoredResults(stored, settings.mode);
+    setItems(loadedItems);
+    
+    if (!localStorage.getItem('hasSeenPracticeQuizTour') && loadedItems.length > 0 && settings.mode !== 'Study Notes') {
+        setTimeout(() => setRunTour(true), 600);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Only start focus tracking if timer > 0
+  const handleTourCallback = (data) => {
+    const { status } = data;
+    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
+      localStorage.setItem('hasSeenPracticeQuizTour', 'true');
+      setRunTour(false);
+    }
+  };
+
   useEffect(() => {
     if (items.length > 0 && targetMinutes > 0 && !isFocusActive && studiedSeconds === 0 && !sessionStartTime && !isSubmitted) {
       setIsFocusActive(true);
@@ -87,10 +116,7 @@ const PractiseQuiz = () => {
 
   const handleTimeChange = (e) => {
     let val = e.target.value;
-    if (val === '') {
-      setTargetMinutes('');
-      return;
-    }
+    if (val === '') { setTargetMinutes(''); return; }
     const mins = Number(val);
     if (mins < 1 || isNaN(mins)) return; 
     setTargetMinutes(mins);
@@ -117,25 +143,16 @@ const PractiseQuiz = () => {
     }
   };
 
-  const handleAnswerChange = (index, value) => {
-    setUserAnswers(prev => ({
-      ...prev,
-      [index]: value
-    }));
-  };
+  const handleAnswerChange = (index, value) => { setUserAnswers(prev => ({ ...prev, [index]: value })); };
 
   const handleSubmitQuiz = async (secondsOverride) => {
-    setIsFocusActive(false);
-    setIsSubmitted(true);
-    
+    setIsFocusActive(false); setIsSubmitted(true);
     const safeTargetMins = Number(targetMinutes) || 25;
     const actualSeconds = secondsOverride !== undefined ? secondsOverride : (safeTargetMins * 60) - remainingSeconds;
     
-    setStudiedSeconds(actualSeconds);
-    localStorage.removeItem('quizFocusEndTime');
+    setStudiedSeconds(actualSeconds); localStorage.removeItem('quizFocusEndTime');
 
-    let correctCount = 0;
-    let gradableCount = 0;
+    let correctCount = 0; let gradableCount = 0;
 
     items.forEach((item, index) => {
       const isMCQ = Array.isArray(item.options) && item.options.length > 0;
@@ -144,10 +161,7 @@ const PractiseQuiz = () => {
         const userAns = userAnswers[index] || '';
         const userFirstChar = userAns.trim().charAt(0).toUpperCase();
         const actualFirstChar = item.answer.trim().charAt(0).toUpperCase();
-        
-        if (item.answer.includes(userAns) || userFirstChar === actualFirstChar) {
-          correctCount++;
-        }
+        if (item.answer.includes(userAns) || userFirstChar === actualFirstChar) correctCount++;
       }
     });
 
@@ -159,14 +173,12 @@ const PractiseQuiz = () => {
       try {
         const subjectName = localStorage.getItem('practiceSubject') || 'Practice Review';
         
+        // 🛡️ Added withCredentials to securely sync focus scores to dashboard
         await axios.post('http://localhost:5000/api/practice/log-session', {
-          subjectName: subjectName,
-          startTime: sessionStartTime || new Date().toISOString(),
-          endTime: new Date().toISOString(),
-          durationMinutes: Math.max(durationMinutes, 1), 
-          focusScore: finalScore 
-        });
-
+          subjectName: subjectName, startTime: sessionStartTime || new Date().toISOString(),
+          endTime: new Date().toISOString(), durationMinutes: Math.max(durationMinutes, 1), focusScore: finalScore 
+        }, { withCredentials: true });
+        
         setSaveSuccess(`Evaluation Complete! Score: ${finalScore}%. Data logged to Analytics.`);
         setTimeout(() => setSaveSuccess(''), 6000);
       } catch  {
@@ -182,152 +194,76 @@ const PractiseQuiz = () => {
     setGenerateError('');
     const selectedTopics = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
     const selectedMode = modeMap[settings.mode];
-
-    if (!selectedMode || selectedTopics.length === 0) {
-      setGenerateError('Mode and topics required.');
-      return;
-    }
+    if (!selectedMode || selectedTopics.length === 0) { setGenerateError('Mode and topics required.'); return; }
 
     const payload = {
-      mode: selectedMode,
-      topic: selectedTopics.join(', '),
+      mode: selectedMode, topic: selectedTopics.join(', '),
       difficulty: { 'Easy': 'easy', 'Medium': 'medium', 'Hard': 'hard', 'Exam Level': 'exam' }[settings.difficulty] || 'medium',
       numQuestions: Number(settings.questionCount) || 5
     };
 
     setIsGenerating(true);
-
     try {
-      const response = await axios.post('http://localhost:5000/api/practice/generate', payload);
-
+      // 🛡️ Added withCredentials for AI generation call
+      const response = await axios.post('http://localhost:5000/api/practice/generate', payload, { withCredentials: true });
+      
       const nextItems = Array.isArray(response.data.data) ? response.data.data : [];
       localStorage.setItem(RESULTS_KEY, JSON.stringify({ mode: settings.mode, items: nextItems }));
-      setItems(nextItems);
-
-      setUserAnswers({});
-      setIsSubmitted(false);
-      setQuizScore(null);
-      setStudiedSeconds(0);
-      setSessionStartTime(null);
-      setIsFocusActive(false);
-
-    } catch (error) {
-      setGenerateError(error.response?.data?.message || 'Failed to generate questions.');
-    } finally {
-      setIsGenerating(false);
-    }
+      setItems(nextItems); setUserAnswers({}); setIsSubmitted(false); setQuizScore(null);
+      setStudiedSeconds(0); setSessionStartTime(null); setIsFocusActive(false);
+    } catch (error) { setGenerateError(error.response?.data?.message || 'Failed to generate questions.'); } 
+    finally { setIsGenerating(false); }
   };
 
   const handleSaveToLibrary = async (titleValue) => {
     const selectedMode = modeMap[settings.mode];
     if (!selectedMode || items.length === 0) return;
-
-    setIsSaving(true);
-    setSaveError('');
-    setSaveSuccess('');
+    setIsSaving(true); setSaveError(''); setSaveSuccess('');
 
     try {
-      const payload = {
-        title: titleValue.trim(),
-        type: selectedMode,
-        category: localStorage.getItem('practiceSubject') || 'General', 
-        content: { items, meta: { mode: settings.mode } }
-      };
-
-      await axios.post('http://localhost:5000/api/library/save-content', payload);
-
-      setIsSaveModalOpen(false);
-      setSaveSuccess('Saved to library.');
-    } catch  {
-      setSaveError('Failed to save content.');
-    } finally {
-      setIsSaving(false);
-    }
+      const payload = { title: titleValue.trim(), type: selectedMode, category: localStorage.getItem('practiceSubject') || 'General', content: { items, meta: { mode: settings.mode } } };
+      
+      // 🛡️ Added withCredentials
+      await axios.post('http://localhost:5000/api/library/save-content', payload, { withCredentials: true });
+      
+      setIsSaveModalOpen(false); setSaveSuccess('Saved to library.');
+    } catch  { setSaveError('Failed to save content.'); } 
+    finally { setIsSaving(false); }
   };
 
   const renderItem = (item, index) => {
     const isMCQ = Array.isArray(item.options) && item.options.length > 0;
-    
     let isCorrect = false;
     if (isSubmitted && isMCQ && item.answer) {
         const uFirst = (userAnswers[index] || '').trim().charAt(0).toUpperCase();
         const aFirst = item.answer.trim().charAt(0).toUpperCase();
-        if (item.answer.includes(userAnswers[index]) || uFirst === aFirst) {
-            isCorrect = true;
-        }
+        if (item.answer.includes(userAnswers[index]) || uFirst === aFirst) isCorrect = true;
     }
 
     return (
-      <div 
-        key={`${index}`} 
-        className={`${styles.resultItem} ${styles.animateSlideUp}`} 
-        style={{ 
-          animationDelay: `${index * 0.1}s`,
-          borderColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)') : '#334155',
-          backgroundColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)') : 'transparent'
-      }}>
-        <div className={styles.resultQuestion}>
-          {settings.mode !== 'Study Notes' ? `Q${index + 1}. ` : ''} {item.question || item.scenario || item.content || 'AI Content'}
-        </div>
-        
+      <div key={`${index}`} className={`${styles.resultItem} ${styles.animateSlideUp}`} style={{ animationDelay: `${index * 0.1}s`, borderColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)') : '#334155', backgroundColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)') : 'transparent' }}>
+        <div className={styles.resultQuestion}>{settings.mode !== 'Study Notes' ? `Q${index + 1}. ` : ''} {item.question || item.scenario || item.content || 'AI Content'}</div>
         {isMCQ && (
           <div className={styles.interactiveOptions}>
             {item.options.map((option, optIndex) => {
               const isSelected = userAnswers[index] === option;
               let btnClass = styles.optionBtn;
-              
               if (isSubmitted) {
-                  const optFirst = option.charAt(0).toUpperCase();
-                  const ansFirst = item.answer.trim().charAt(0).toUpperCase();
+                  const optFirst = option.charAt(0).toUpperCase(); const ansFirst = item.answer.trim().charAt(0).toUpperCase();
                   const isActuallyCorrect = item.answer.includes(option) || optFirst === ansFirst;
-                  
                   if (isActuallyCorrect) btnClass = styles.optionBtnCorrect;
                   else if (isSelected && !isActuallyCorrect) btnClass = styles.optionBtnWrong;
                   else btnClass = styles.optionBtnDisabled;
-              } else if (isSelected) {
-                  btnClass = styles.optionBtnSelected;
-              }
-
-              return (
-                <button 
-                    key={optIndex} 
-                    className={btnClass} 
-                    onClick={() => !isSubmitted && handleAnswerChange(index, option)}
-                    disabled={isSubmitted}
-                >
-                  {option}
-                </button>
-              );
+              } else if (isSelected) { btnClass = styles.optionBtnSelected; }
+              return (<button key={optIndex} className={btnClass} onClick={() => !isSubmitted && handleAnswerChange(index, option)} disabled={isSubmitted}>{option}</button>);
             })}
           </div>
         )}
-
-        {!isMCQ && !item.section && item.question && settings.mode !== 'Study Notes' && (
-            <textarea 
-                className={styles.interactiveTextarea}
-                placeholder={isSubmitted ? "" : "Type your answer here to evaluate..."}
-                value={userAnswers[index] || ''}
-                onChange={(e) => handleAnswerChange(index, e.target.value)}
-                disabled={isSubmitted}
-            />
-        )}
-
-        {isSubmitted && item.answer && settings.mode !== 'Study Notes' && (
-            <div className={styles.resultAnswer} style={{ marginTop: '15px' }}>
-                <strong>Actual Answer:</strong> {item.answer}
-            </div>
-        )}
-        {isSubmitted && item.explanation && settings.mode !== 'Study Notes' && (
-            <div className={styles.resultExplain}>{item.explanation}</div>
-        )}
+        {!isMCQ && !item.section && item.question && settings.mode !== 'Study Notes' && (<textarea className={styles.interactiveTextarea} placeholder={isSubmitted ? "" : "Type your answer here to evaluate..."} value={userAnswers[index] || ''} onChange={(e) => handleAnswerChange(index, e.target.value)} disabled={isSubmitted} />)}
+        {isSubmitted && item.answer && settings.mode !== 'Study Notes' && (<div className={styles.resultAnswer} style={{ marginTop: '15px' }}><strong>Actual Answer:</strong> {item.answer}</div>)}
+        {isSubmitted && item.explanation && settings.mode !== 'Study Notes' && (<div className={styles.resultExplain}>{item.explanation}</div>)}
       </div>
     );
-  };
-
-  const formatTime = (totalSeconds) => {
-    const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-    const s = (totalSeconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
   };
 
   const modeLabel = settings.mode || 'Practice';
@@ -335,39 +271,31 @@ const PractiseQuiz = () => {
   return (
     <div className={styles.quizContainer}>
       
-      <header className={`${styles.quizHeader} ${styles.animateFadeInUp}`} style={{ alignItems: 'center', background: '#1e293b', padding: '20px', borderRadius: '16px', border: isFocusActive ? '1px solid #10b981' : '1px solid #334155' }}>
+      <Joyride
+        steps={tourSteps} run={runTour} continuous={true} showSkipButton={true} callback={handleTourCallback}
+        styles={{
+          options: { arrowColor: '#1e293b', backgroundColor: '#1e293b', overlayColor: 'rgba(15, 23, 42, 0.85)', primaryColor: '#6366f1', textColor: '#f8fafc', zIndex: 1000 },
+          buttonNext: { backgroundColor: '#6366f1', borderRadius: '8px', fontSize: '0.9rem', padding: '8px 16px' },
+          buttonBack: { color: '#cbd5e1', marginRight: '8px' }, buttonSkip: { color: '#64748b' }
+        }}
+      />
+
+      <header id="tour-quiz-timer" className={`${styles.quizHeader} ${styles.animateFadeInUp}`} style={{ alignItems: 'center', background: '#1e293b', padding: '20px', borderRadius: '16px', border: isFocusActive ? '1px solid #10b981' : '1px solid #334155' }}>
         <div>
-          <span className={styles.badge} style={{ color: isFocusActive ? '#10b981' : (isSubmitted ? '#8b5cf6' : '#3b82f6') }}>
-            {isFocusActive ? 'Focus Engine Active' : (isSubmitted ? 'Evaluation Complete' : 'Practice Lab')}
-          </span>
+          <span className={styles.badge} style={{ color: isFocusActive ? '#10b981' : (isSubmitted ? '#8b5cf6' : '#3b82f6') }}>{isFocusActive ? 'Focus Engine Active' : (isSubmitted ? 'Evaluation Complete' : 'Practice Lab')}</span>
           <h2 className={styles.quizTitle}>{modeLabel} {quizScore !== null ? `- Score: ${quizScore}%` : ''}</h2>
         </div>
-        
-        {/* Only render Timer block if targetMinutes > 0 */}
         {items.length > 0 && targetMinutes > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(15, 23, 42, 0.4)', padding: '6px 12px', borderRadius: '8px', border: '1px solid #334155' }}>
               <Clock size={16} color="#94a3b8" />
-              <input 
-                type="number" 
-                value={targetMinutes} 
-                onChange={handleTimeChange}
-                onBlur={handleTimeBlur}
-                disabled={isSubmitted || isFocusActive}
-                style={{ width: '40px', background: 'transparent', border: 'none', color: '#fff', fontSize: '1rem', fontWeight: 'bold', textAlign: 'center', outline: 'none' }}
-              />
+              <input type="number" value={targetMinutes} onChange={handleTimeChange} onBlur={handleTimeBlur} disabled={isSubmitted || isFocusActive} style={{ width: '40px', background: 'transparent', border: 'none', color: '#fff', fontSize: '1rem', fontWeight: 'bold', textAlign: 'center', outline: 'none' }} />
               <span style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '600' }}>min</span>
             </div>
-
             <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: isFocusActive ? '#10b981' : '#f8fafc', fontVariantNumeric: 'tabular-nums', minWidth: '100px', textAlign: 'center' }}>
-              {formatTime(remainingSeconds)}
+              {`${Math.floor(remainingSeconds / 60).toString().padStart(2, '0')}:${(remainingSeconds % 60).toString().padStart(2, '0')}`}
             </div>
-
-            {isFocusActive && (
-              <button onClick={() => handleSubmitQuiz()} className={styles.btnPulseHover} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Square size={16} fill="white"/> End Early
-              </button>
-            )}
+            {isFocusActive && (<button onClick={() => handleSubmitQuiz()} className={styles.btnPulseHover} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}><Square size={16} fill="white"/> End Early</button>)}
           </div>
         )}
       </header>
@@ -377,34 +305,17 @@ const PractiseQuiz = () => {
       ) : (
         <section className={styles.resultsCard}>
           <div className={styles.resultsHeader}>
-            <div>
-              <h3 className={styles.resultsTitle}>{modeLabel} Content</h3>
-              <p className={styles.resultsSub}>
-                  {modeLabel === 'Study Notes' ? 'Review your study material below.' : (isSubmitted ? 'Review your performance below.' : 'Answers are hidden until you submit.')}
-              </p>
-            </div>
-            <button className={styles.secondaryAction} onClick={() => setIsSaveModalOpen(true)} disabled={isSaving}>
-              <Save size={16}/> {isSaving ? 'Saving...' : 'Save to Library'}
-            </button>
+            <div><h3 className={styles.resultsTitle}>{modeLabel} Content</h3><p className={styles.resultsSub}>{modeLabel === 'Study Notes' ? 'Review your study material below.' : (isSubmitted ? 'Review your performance below.' : 'Answers are hidden until you submit.')}</p></div>
+            <button className={styles.secondaryAction} onClick={() => setIsSaveModalOpen(true)} disabled={isSaving}><Save size={16}/> {isSaving ? 'Saving...' : 'Save to Library'}</button>
           </div>
-          <div className={styles.resultsList}>
-            {items.map((item, index) => renderItem(item, index))}
-          </div>
+          <div className={styles.resultsList}>{items.map((item, index) => renderItem(item, index))}</div>
         </section>
       )}
 
-      <div className={`${styles.quizActionRow} ${styles.animateFadeInUp}`} style={{ alignItems: 'center', animationDelay: '0.5s' }}>
-        <button className={styles.secondaryAction} onClick={handleGenerateMore} disabled={isGenerating}>
-          <RefreshCw size={16} className={isGenerating ? styles.spin : ''} /> {isGenerating ? 'Generating...' : `Generate More`}
-        </button>
-
-        {/* Only show Submit button if it's an actual Quiz/Test */}
+      <div id="tour-quiz-actions" className={`${styles.quizActionRow} ${styles.animateFadeInUp}`} style={{ alignItems: 'center', animationDelay: '0.5s' }}>
+        <button className={styles.secondaryAction} onClick={handleGenerateMore} disabled={isGenerating}><RefreshCw size={16} className={isGenerating ? styles.spin : ''} /> {isGenerating ? 'Generating...' : `Generate More`}</button>
         {!isSubmitted && items.length > 0 && modeLabel !== 'Study Notes' && (
-          <button
-            className={`${styles.finalAction} ${styles.btnPulseHover}`}
-            onClick={() => handleSubmitQuiz()}
-            style={{ marginLeft: 'auto', background: '#10b981', display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
+          <button className={`${styles.finalAction} ${styles.btnPulseHover}`} onClick={() => handleSubmitQuiz()} style={{ marginLeft: 'auto', background: '#10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <CheckCircle size={18} /> Submit Test & Evaluate
           </button>
         )}
@@ -419,8 +330,7 @@ const PractiseQuiz = () => {
       {isSaveModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalCard}>
-            <h3 className={styles.modalTitle}>Save to Library</h3>
-            <p className={styles.modalText}>Enter a name for this content.</p>
+            <h3 className={styles.modalTitle}>Save to Library</h3><p className={styles.modalText}>Enter a name for this content.</p>
             <input className={styles.modalInput} value={contentTitle} onChange={(e) => { setContentTitle(e.target.value); setContentTitleError(''); }} placeholder="e.g., Mock Test - Unit 2" />
             {contentTitleError && <div className={styles.modalError}>{contentTitleError}</div>}
             <div className={styles.modalActions}>

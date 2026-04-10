@@ -344,3 +344,69 @@
     margin: 0 auto; 
   }
 }
+
+.otpOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.85);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.otpCard {
+  background: var(--bg-panel, #1e293b);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 16px;
+  padding: 2.5rem;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  animation: slideUp 0.4s ease-out;
+}
+
+.otpIcon {
+  width: 60px;
+  height: 60px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary, #6366f1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem auto;
+}
+
+.otpInput {
+  width: 100%;
+  background: #0f172a;
+  border: 2px solid #334155;
+  color: white;
+  font-size: 2rem;
+  letter-spacing: 12px;
+  text-align: center;
+  padding: 15px;
+  border-radius: 12px;
+  margin: 20px 0;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.otpInput:focus {
+  border-color: var(--primary, #6366f1);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

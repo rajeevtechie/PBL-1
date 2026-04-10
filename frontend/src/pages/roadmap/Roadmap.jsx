@@ -4,6 +4,7 @@ import {
   BookOpen, Briefcase, CheckCircle, Circle, Lock, 
   AlertTriangle, Loader2, ChevronRight, Sparkles, Edit2, GraduationCap, ChevronDown
 } from 'lucide-react';
+import { Joyride, STATUS } from 'react-joyride'; // 👈 IMPORT JOYRIDE
 import styles from './Roadmap.module.css';
 
 const Roadmap = () => {
@@ -22,6 +23,30 @@ const Roadmap = () => {
   const [expandedUnits, setExpandedUnits] = useState({});
   const [isGlobal, setIsGlobal] = useState(false); 
 
+  // --- 🪄 TOUR STATE ---
+  const [runTour, setRunTour] = useState(false);
+  const tourSteps = [
+    {
+      target: '#tour-academic',
+      content: (
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Your Academic Path 📚</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>This is your university syllabus automatically broken down into manageable units. Mark them as complete as you study!</p>
+        </div>
+      ),
+      disableBeacon: true,
+    },
+    {
+      target: '#tour-career',
+      content: (
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Bridge the Gap 🌉</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>Type your dream job (e.g., 'Data Analyst') to generate a custom list of industry skills you need. Or, type <strong>'Exam Prep'</strong> to reveal high-weightage topics!</p>
+        </div>
+      ),
+    }
+  ];
+
   const toggleUnit = (index) => {
     setExpandedUnits(prev => ({ ...prev, [index]: !prev[index] }));
   };
@@ -29,8 +54,7 @@ const Roadmap = () => {
   useEffect(() => {
     const fetchSubjectList = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await axios.get('http://localhost:5000/api/syllabus/list', { headers: { Authorization: `Bearer ${token}` } });
+            const res = await axios.get('http://localhost:5000/api/syllabus/list');
             setSubjectList(res.data);
         } catch (err) {
             console.error("Failed to load subject list", err);
@@ -45,17 +69,11 @@ const Roadmap = () => {
       setError('');
       
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            setError("Please login to view your roadmap.");
-            setLoading(false); return;
-        }
-
         const endpoint = activeId === 'latest' 
             ? `http://localhost:5000/api/syllabus/latest` 
             : `http://localhost:5000/api/syllabus/${activeId}`;
 
-        const resSyllabus = await axios.get(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
+        const resSyllabus = await axios.get(endpoint);
         setRoadmap(resSyllabus.data);
 
         if (activeId === 'latest' && resSyllabus.data.id) {
@@ -65,9 +83,7 @@ const Roadmap = () => {
 
         try {
             const syllabusIdQuery = resSyllabus.data.id || activeId;
-            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`);
             
             setCareerData(resCareer.data);
             if (resCareer.data.targetRole) {
@@ -78,17 +94,30 @@ const Roadmap = () => {
         } catch {
             setCareerData(null);
             setTargetRole("");
-            console.log("No career data yet for this specific context.");
         }
 
       } catch (err) {
         setError(err.response?.status === 404 ? "No roadmap found. Upload a syllabus first!" : "Failed to load your learning path.");
       } finally {
         setLoading(false);
+        
+        // 🪄 Check if they have seen the Roadmap tour
+        if (!localStorage.getItem('hasSeenRoadmapTour') && !error) {
+          setTimeout(() => setRunTour(true), 600);
+        }
       }
     };
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
+
+  const handleTourCallback = (data) => {
+    const { status } = data;
+    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
+      localStorage.setItem('hasSeenRoadmapTour', 'true');
+      setRunTour(false);
+    }
+  };
 
   const handleAnalyzeGaps = async () => {
     if (!targetRole.trim()) {
@@ -97,20 +126,14 @@ const Roadmap = () => {
     
     setAnalyzing(true);
     try {
-        const token = localStorage.getItem('token');
         const currentId = roadmap?.id || activeId; 
-        
-        const response = await axios.post(`http://localhost:5000/api/syllabus/${currentId}/analyze`, 
-            { targetRole: targetRole, isGlobal: isGlobal, syllabusId: currentId },
-            { headers: { 'Authorization': `Bearer ${token}` }}
-        );
+        const response = await axios.post(`http://localhost:5000/api/syllabus/${currentId}/analyze`, { targetRole: targetRole, isGlobal: isGlobal, syllabusId: currentId });
         
         setCareerData({ targetRole: targetRole, recommendations: response.data.recommendations });
         setIsEditingGoal(false);
     } catch (err) {
         console.error("Analysis Error:", err);
-        const serverMessage = err.response?.data?.message;
-        alert(serverMessage ? serverMessage : "Failed to analyze gaps. Please try again.");
+        alert(err.response?.data?.message || "Failed to analyze gaps. Please try again.");
     } finally {
         setAnalyzing(false);
     }
@@ -126,12 +149,8 @@ const Roadmap = () => {
     setRoadmap(updatedRoadmap);
 
     try {
-        const token = localStorage.getItem('token');
         const currentId = roadmap?.id || activeId;
-        await axios.put(`http://localhost:5000/api/syllabus/${currentId}/structure`, 
-            { structure: updatedRoadmap },
-            { headers: { 'Authorization': `Bearer ${token}` }}
-        );
+        await axios.put(`http://localhost:5000/api/syllabus/${currentId}/structure`, { structure: updatedRoadmap });
     } catch (err) {
         console.error("Failed to update academic progress", err);
         alert("Failed to save progress. Reverting change.");
@@ -143,17 +162,11 @@ const Roadmap = () => {
 
   const handleToggleComplete = async (recId, currentStatus) => {
     try {
-        const token = localStorage.getItem('token');
         const newStatus = !currentStatus;
-
         setCareerData(prev => ({
             ...prev, recommendations: prev.recommendations.map(rec => rec.id === recId ? { ...rec, is_completed: newStatus } : rec)
         }));
-
-        await axios.patch(`http://localhost:5000/api/syllabus/recommendation/${recId}/toggle`, 
-            { isCompleted: newStatus },
-            { headers: { 'Authorization': `Bearer ${token}` }}
-        );
+        await axios.patch(`http://localhost:5000/api/syllabus/recommendation/${recId}/toggle`, { isCompleted: newStatus });
     } catch (err) {
         console.error("Failed to update status", err);
         alert("Failed to save progress.");
@@ -174,6 +187,16 @@ const Roadmap = () => {
   return (
     <div className={styles.roadmapContainer}>
       
+      {/* 🪄 JOYRIDE INJECTION */}
+      <Joyride
+        steps={tourSteps} run={runTour} continuous={true} showSkipButton={true} callback={handleTourCallback}
+        styles={{
+          options: { arrowColor: '#1e293b', backgroundColor: '#1e293b', overlayColor: 'rgba(15, 23, 42, 0.85)', primaryColor: '#6366f1', textColor: '#f8fafc', zIndex: 1000 },
+          buttonNext: { backgroundColor: '#6366f1', borderRadius: '8px', fontSize: '0.9rem', padding: '8px 16px' },
+          buttonBack: { color: '#cbd5e1', marginRight: '8px' }, buttonSkip: { color: '#64748b' }
+        }}
+      />
+
       <header className={styles.header}>
         <div className={styles.headerContent} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '20px' }}>
             <div>
@@ -209,7 +232,7 @@ const Roadmap = () => {
 
       <div className={styles.tracksGrid}>
         
-        <section className={styles.trackColumn}>
+        <section id="tour-academic" className={styles.trackColumn}> {/* 👈 TARGET 1 */}
           <div className={styles.trackHeader} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '15px' }}>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', width: '100%' }}>
                 <div className={styles.iconBox}><BookOpen size={24} /></div>
@@ -229,8 +252,6 @@ const Roadmap = () => {
           <div className={styles.timeline}>
             {roadmap?.units?.map((unit, index) => {
               const unitDone = unit.is_completed || unit.completed || unit.is_completed === 1;
-              
-              // Helper to check if unit has <= 3 topics
               const isShortUnit = !unit.topics || unit.topics.length <= 3;
               
               return (
@@ -253,7 +274,6 @@ const Roadmap = () => {
                       )}
                   </ul>
                   
-                  {/* ✅ FIXED: Show checkbox if expanded OR if the unit is naturally short! */}
                   {(expandedUnits[index] || isShortUnit) && (
                       <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <input type="checkbox" id={`unit-${index}`} checked={unitDone} onChange={() => handleToggleAcademicUnit(index)} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#10b981' }} />
@@ -266,7 +286,7 @@ const Roadmap = () => {
           </div>
         </section>
 
-        <section className={styles.trackColumn}>
+        <section id="tour-career" className={styles.trackColumn}> {/* 👈 TARGET 2 */}
           <div className={styles.trackHeader} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '15px' }}>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', width: '100%' }}>
                 <div className={styles.iconBox}>

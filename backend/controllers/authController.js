@@ -1,62 +1,59 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const { sendOTP } = require('../utils/mailer'); 
 require('dotenv').config();
 
-// --- 1. REGISTER NEW USER ---
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+// --- 1. REGISTER ---
 exports.register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
-        // 🛡️ SECURITY: Strict Input Validation
-        const nameRegex = /^[a-zA-Z\s]+$/; // Letters and spaces only
+        const nameRegex = /^[a-zA-Z\s]+$/; 
         if (!name || !nameRegex.test(name)) {
             return res.status(400).json({ message: "Name must contain only letters and spaces." });
         }
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Standard email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; 
         if (!email || !emailRegex.test(email)) {
             return res.status(400).json({ message: "Please enter a valid email address." });
         }
 
-        if (!password || password.length < 8) {
-            return res.status(400).json({ message: "Password must be at least 8 characters long." });
+        // 🛡️ STRICT PASSWORD VALIDATOR
+        // 🛡️ STRICT PASSWORD VALIDATOR
+        // Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character (ANY special character)
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+        
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({ 
+                message: "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character." 
+            });
         }
 
-        // Check if user already exists
         const [existingUser] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
         if (existingUser.length > 0) {
             return res.status(400).json({ message: "Email is already registered." });
         }
 
-        // 🛡️ SECURITY: Hash password with 12 salt rounds (Optimal balance of speed/security)
         const hashedPassword = await bcrypt.hash(password, 12);
+        
+        const otp = generateOTP();
+        const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); 
 
-        // Insert into database
         const [result] = await db.execute(
-            'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
-            [name, email, hashedPassword, 'student']
+            'INSERT INTO users (name, email, password_hash, role, is_verified, verification_otp, otp_expires_at) VALUES (?, ?, ?, ?, FALSE, ?, ?)',
+            [name, email, hashedPassword, 'student', otp, otpExpiry]
         );
 
-        // Generate JWT Token
-        const token = jwt.sign(
-            { id: result.insertId, role: 'student' },
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' } // Token lasts 7 days
-        );
-
-        // 🛡️ SECURITY: Send token via HttpOnly Cookie (Invisible to JS/Hackers)
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production', 
-            sameSite: 'strict', 
-            maxAge: 7 * 24 * 60 * 60 * 1000 
-        });
+        await sendOTP(email, otp);
 
         res.status(201).json({
             success: true,
-            message: "Registration successful",
-            user: { id: result.insertId, name, email, role: 'student' }
+            message: "Registration successful. Please check your email for the OTP.",
+            requireVerification: true,
+            email: email 
         });
 
     } catch (error) {
@@ -65,43 +62,116 @@ exports.register = async (req, res) => {
     }
 };
 
-// --- 2. LOGIN EXISTING USER ---
-exports.login = async (req, res) => {
+// --- 2. VERIFY EMAIL ---
+exports.verifyEmail = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, otp } = req.body;
 
-        // Fetch user from DB
         const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-        if (users.length === 0) {
-            return res.status(400).json({ message: "Invalid email or password." });
-        }
+        if (users.length === 0) return res.status(400).json({ message: "User not found." });
 
         const user = users[0];
 
-        // Verify Password
-        const isMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isMatch) {
-            return res.status(400).json({ message: "Invalid email or password." });
+        if (user.is_verified) {
+            return res.status(400).json({ message: "Email is already verified." });
         }
 
-        // Generate JWT Token
-        const token = jwt.sign(
-            { id: user.id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' }
+        if (user.verification_otp !== otp) {
+            return res.status(400).json({ message: "Invalid verification code." });
+        }
+
+        if (new Date() > new Date(user.otp_expires_at)) {
+            return res.status(400).json({ message: "Verification code has expired. Please request a new one." });
+        }
+
+        await db.execute(
+            'UPDATE users SET is_verified = TRUE, verification_otp = NULL, otp_expires_at = NULL WHERE email = ?',
+            [email]
         );
 
-        // 🛡️ SECURITY: Send token via HttpOnly Cookie
+        const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
         res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000
+            httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 
         });
 
         res.status(200).json({
             success: true,
-            message: "Login successful",
+            message: "Email verified successfully! Logging you in...",
+            user: { id: user.id, name: user.name, email: user.email, role: user.role }
+        });
+
+    } catch (error) {
+        console.error("Verify Error:", error);
+        res.status(500).json({ message: "Internal server error." });
+    }
+};
+
+// --- 2.5 RESEND OTP ---
+exports.resendOTP = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+        if (users.length === 0) return res.status(400).json({ message: "User not found." });
+
+        const user = users[0];
+
+        if (user.is_verified) {
+            return res.status(400).json({ message: "Email is already verified." });
+        }
+
+        // Generate a new OTP and Expiry
+        const otp = generateOTP();
+        const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+        // Update the user's record with the new OTP
+        await db.execute(
+            'UPDATE users SET verification_otp = ?, otp_expires_at = ? WHERE email = ?',
+            [otp, otpExpiry, email]
+        );
+
+        // Send the new email
+        await sendOTP(email, otp);
+
+        res.status(200).json({ success: true, message: "A new verification code has been sent." });
+
+    } catch (error) {
+        console.error("Resend OTP Error:", error);
+        res.status(500).json({ message: "Failed to resend code. Please try again." });
+    }
+};
+
+// --- 3. LOGIN ---
+exports.login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+        if (users.length === 0) return res.status(400).json({ message: "Invalid email or password." });
+
+        const user = users[0];
+
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+        if (!isMatch) return res.status(400).json({ message: "Invalid email or password." });
+
+        // 🛡️ SECURITY: Block login if they haven't verified their email!
+        if (user.is_verified === 0 || !user.is_verified) {
+            return res.status(403).json({ 
+                message: "Please verify your email address before logging in.",
+                requireVerification: true,
+                email: user.email
+            });
+        }
+
+        const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        res.cookie('token', token, {
+            httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        res.status(200).json({
+            success: true, message: "Login successful",
             user: { id: user.id, name: user.name, email: user.email, role: user.role }
         });
 
@@ -111,29 +181,18 @@ exports.login = async (req, res) => {
     }
 };
 
-// --- 3. GUEST LOGIN (DEMO MODE) ---
+// --- 4. GUEST LOGIN & LOGOUT ---
 exports.guestLogin = async (req, res) => {
     try {
-        const guestId = 4; // Your specific guest user ID in the database
+        const guestId = 4; 
+        const token = jwt.sign({ id: guestId, role: 'guest' }, process.env.JWT_SECRET, { expiresIn: '1h' });
         
-        // 🛡️ We explicitly add role: 'guest' so we can restrict them later
-        const token = jwt.sign(
-            { id: guestId, role: 'guest' }, 
-            process.env.JWT_SECRET, 
-            { expiresIn: '1h' } // Guest tokens only last 1 hour
-        );
-        
-        // Send cookie
         res.cookie('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 60 * 60 * 1000 // 1 hour
+            httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 60 * 60 * 1000 
         });
 
         res.status(200).json({
-            success: true,
-            message: "Logged in as Guest",
+            success: true, message: "Logged in as Guest",
             user: { id: guestId, name: "Guest Student", email: "guest@insighted.com", role: "guest" }
         });
     } catch (error) {
@@ -142,14 +201,7 @@ exports.guestLogin = async (req, res) => {
     }
 };
 
-// --- 4. LOGOUT ---
-// Because JS can't delete HttpOnly cookies, the server must clear it!
 exports.logout = (req, res) => {
-    res.clearCookie('token', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict'
-    });
-    
+    res.clearCookie('token', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
     res.status(200).json({ success: true, message: "Logged out successfully" });
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Lightbulb, TrendingUp, AlertTriangle, ArrowRight, Send, Loader2, CheckCircle, Sparkles } from 'lucide-react';
+import { Joyride, STATUS } from 'react-joyride'; // 👈 IMPORT JOYRIDE
 import styles from './Insights.module.css';
 
 const Insights = () => {
@@ -10,7 +11,7 @@ const Insights = () => {
   
   const [metrics, setMetrics] = useState({
     avgFocus: 0,
-    totalSessions: 0, // Added this to track if user is new!
+    totalSessions: 0, 
     peakTime: "Analyzing...",
     peakDesc: "Log a focus session to unlock AI timing insights."
   });
@@ -24,6 +25,30 @@ const Insights = () => {
   const [currentInput, setCurrentInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
   const chatEndRef = useRef(null);
+
+  // --- 🪄 TOUR STATE ---
+  const [runTour, setRunTour] = useState(false);
+  const tourSteps = [
+    {
+      target: '#tour-feed',
+      content: (
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Real-time Feed 📡</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>This feed updates live as you study. It alerts you to dropping focus levels and highlights career skills you are missing.</p>
+        </div>
+      ),
+      disableBeacon: true,
+    },
+    {
+      target: '#tour-mentor',
+      content: (
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Your Personal Mentor 🤖</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>Ask this AI anything! It knows your current focus score and study habits, and can give you personalized advice on how to improve.</p>
+        </div>
+      ),
+    }
+  ];
 
   useEffect(() => {
     const fetchInsightsData = async () => {
@@ -45,11 +70,23 @@ const Insights = () => {
         console.error("Failed to fetch insights:", error);
       } finally {
         setLoading(false);
+        // 🪄 Check if they have seen the Insights tour
+        if (!localStorage.getItem('hasSeenInsightsTour')) {
+          setTimeout(() => setRunTour(true), 600);
+        }
       }
     };
 
     fetchInsightsData();
   }, []);
+
+  const handleTourCallback = (data) => {
+    const { status } = data;
+    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
+      localStorage.setItem('hasSeenInsightsTour', 'true');
+      setRunTour(false);
+    }
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -103,13 +140,45 @@ const Insights = () => {
 
   return (
     <div className={styles.insightsContainer}>
-      <div className={styles.feedColumn}>
+      
+      {/* 🪄 JOYRIDE INJECTION */}
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        continuous={true}
+        showSkipButton={true}
+        callback={handleTourCallback}
+        styles={{
+          options: {
+            arrowColor: '#1e293b',
+            backgroundColor: '#1e293b',
+            overlayColor: 'rgba(15, 23, 42, 0.85)',
+            primaryColor: '#6366f1',
+            textColor: '#f8fafc',
+            zIndex: 1000,
+          },
+          buttonNext: {
+            backgroundColor: '#6366f1',
+            borderRadius: '8px',
+            fontSize: '0.9rem',
+            padding: '8px 16px'
+          },
+          buttonBack: {
+            color: '#cbd5e1',
+            marginRight: '8px'
+          },
+          buttonSkip: {
+            color: '#64748b'
+          }
+        }}
+      />
+
+      <div id="tour-feed" className={styles.feedColumn}> {/* 👈 TARGET 1 */}
         <header className={`${styles.header} ${styles.animateFadeInUp}`}>
           <h1>AI Growth Engine</h1>
           <p>Real-time analysis of your learning patterns.</p>
         </header>
 
-        {/* FIX: If totalSessions is 0, show a welcome card instead of fake praise! */}
         {metrics.totalSessions === 0 ? (
            <div className={`${styles.insightCard} ${styles.opportunity} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.1s' }}>
              <div className={styles.cardHeader}>
@@ -192,7 +261,7 @@ const Insights = () => {
         </div>
       </div>
 
-      <div className={`${styles.chatColumn} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.4s' }}>
+      <div id="tour-mentor" className={`${styles.chatColumn} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.4s' }}> {/* 👈 TARGET 2 */}
         <div className={styles.chatHeader}>
           <h3>InsightED AI Mentor</h3>
           <span className={styles.onlineDot}></span>
