@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { UploadCloud, FileText, Sliders, Timer, Sparkles, Folder, Save, Loader2, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileText, Timer, Sparkles, Folder, Save, Loader2, CheckCircle2 } from 'lucide-react';
 import axios from 'axios';
 import styles from './practise_lab.module.css';
 
 const TOPICS_KEY = 'practiceTopics';
 const SELECTED_KEY = 'practiceSelectedTopics';
 const SETTINGS_KEY = 'practiceSettings';
-// ✅ NEW: Keys to save your draft progress
 const DRAFT_TEXT_KEY = 'practiceDraftText';
 const DRAFT_FILE_META_KEY = 'practiceDraftFileMeta';
 
@@ -21,27 +20,21 @@ const PracticeLab = () => {
   const [subjects, setSubjects] = useState([]);
   const [loadingSubjects, setLoadingSubjects] = useState(!passedSubject);
 
-  // --- PRACTICE LAB STATE ---
   const [uploadedFile, setUploadedFile] = useState(null);
-  
-  // ✅ FIX: Load drafted text and file metadata if the user navigated away and came back
   const [textInput, setTextInput] = useState(() => sessionStorage.getItem(DRAFT_TEXT_KEY) || '');
   const [draftFileMeta, setDraftFileMeta] = useState(() => JSON.parse(sessionStorage.getItem(DRAFT_FILE_META_KEY) || 'null'));
-
-  const [selectedTopics, setSelectedTopics] = useState(() => {
-    const storedSelected = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
-    return Array.isArray(storedSelected) ? storedSelected : [];
-  });
 
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
   
-  // Load settings from storage so they don't reset when you leave the page
   const savedSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
   const [activeMode, setActiveMode] = useState(savedSettings.mode || 'Quiz (MCQ)');
   const [difficulty, setDifficulty] = useState(savedSettings.difficulty || 'Medium');
   const [questionCount, setQuestionCount] = useState(savedSettings.questionCount || 15);
   const [timerEnabled, setTimerEnabled] = useState(savedSettings.timerEnabled ?? true);
+  
+  // FIX: Added Timer Duration State
+  const [timerDuration, setTimerDuration] = useState(savedSettings.timerDuration || 25);
   
   const [isSavingFile, setIsSavingFile] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -57,39 +50,30 @@ const PracticeLab = () => {
   const difficulties = ['Easy', 'Medium', 'Hard', 'Exam Level'];
 
   useEffect(() => {
-    if (passedSubject) {
-      localStorage.setItem('practiceSubject', passedSubject);
-    }
+    if (passedSubject) localStorage.setItem('practiceSubject', passedSubject);
   }, [passedSubject]);
 
   useEffect(() => {
     if (!passedSubject) {
       const fetchSubjects = async () => {
         try {
-          const token = localStorage.getItem('token');
-          const res = await axios.get('http://localhost:5000/api/syllabus/list', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+          const res = await axios.get('http://localhost:5000/api/syllabus/list');
           setSubjects(res.data);
-        } catch {
-          console.error("Failed to load subjects");
-        } finally {
-          setLoadingSubjects(false);
-        }
+        } catch { console.error("Failed to load subjects"); } 
+        finally { setLoadingSubjects(false); }
       };
       fetchSubjects();
     }
   }, [passedSubject]);
 
-  // ✅ FIX: Save text input to session storage as they type
   useEffect(() => {
     sessionStorage.setItem(DRAFT_TEXT_KEY, textInput);
   }, [textInput]);
 
   useEffect(() => {
-    const settings = { mode: activeMode, difficulty, questionCount, timerEnabled };
+    const settings = { mode: activeMode, difficulty, questionCount, timerEnabled, timerDuration };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }, [activeMode, difficulty, questionCount, timerEnabled]);
+  }, [activeMode, difficulty, questionCount, timerEnabled, timerDuration]);
 
   const handleSelectSubject = (subject) => {
     setSelectedSubject(subject);
@@ -98,15 +82,13 @@ const PracticeLab = () => {
 
   const handleDrop = (event) => {
     event.preventDefault();
-    const file = event.dataTransfer.files?.[0];
-    handleFileUpload(file);
+    handleFileUpload(event.dataTransfer.files?.[0]);
   };
 
   const handleFileUpload = (file) => {
     if (file) {
       setUploadedFile(file);
       setExtractError('');
-      // ✅ Save metadata so the user knows they uploaded something if they navigate away
       const meta = { name: file.name, size: file.size };
       setDraftFileMeta(meta);
       sessionStorage.setItem(DRAFT_FILE_META_KEY, JSON.stringify(meta));
@@ -118,7 +100,6 @@ const PracticeLab = () => {
     setIsExtracting(true);
 
     if (!uploadedFile && !textInput.trim()) {
-      // ✅ If they have a draft file but no actual file (because they navigated away), warn them.
       if (draftFileMeta && !uploadedFile) {
          setExtractError('Browser security requires you to re-select your PDF file before extracting.');
       } else {
@@ -129,36 +110,23 @@ const PracticeLab = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
       const formData = new FormData();
-
       if (uploadedFile) formData.append('file', uploadedFile);
       if (textInput.trim()) formData.append('text', textInput.trim());
 
-      const response = await fetch('http://localhost:5000/api/practice/extract-topics', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData
-      });
+      // FIX: Changed from fetch() to axios.post() so it automatically includes the secure cookie!
+      const response = await axios.post('http://localhost:5000/api/practice/extract-topics', formData);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Topic extraction failed.');
-      }
-
-      const data = await response.json();
-      const extractedTopics = Array.isArray(data.topics) ? data.topics : [];
+      const extractedTopics = Array.isArray(response.data.topics) ? response.data.topics : [];
       localStorage.setItem(TOPICS_KEY, JSON.stringify(extractedTopics));
       localStorage.setItem(SELECTED_KEY, JSON.stringify([]));
-      setSelectedTopics([]);
       
-      // Clear drafts on success
       sessionStorage.removeItem(DRAFT_TEXT_KEY);
       sessionStorage.removeItem(DRAFT_FILE_META_KEY);
       
       navigate('/practice-topics');
     } catch (error) {
-      setExtractError(error.message);
+      setExtractError(error.response?.data?.message || 'Topic extraction failed.');
     } finally {
       setIsExtracting(false);
     }
@@ -175,27 +143,20 @@ const PracticeLab = () => {
     setSaveSuccess('');
 
     try {
-      const token = localStorage.getItem('token');
       const formData = new FormData();
       formData.append('file', uploadedFile);
       formData.append('title', titleValue.trim());
       formData.append('category', selectedSubject.course_title); 
 
-      const response = await fetch('http://localhost:5000/api/library/save-file', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Failed to save file.');
+      // FIX: Changed to axios
+      await axios.post('http://localhost:5000/api/library/save-file', formData);
 
       setIsFileModalOpen(false);
       setFileTitle('');
       setFileTitleError('');
       setSaveSuccess('Saved to library. You can now extract topics!');
     } catch (error) {
-      setSaveError(error.message);
+      setSaveError(error.response?.data?.message || 'Failed to save file.');
     } finally {
       setIsSavingFile(false);
     }
@@ -268,7 +229,6 @@ const PracticeLab = () => {
         </div>
       </header>
 
-      {/* STEP 1: UPLOAD & EXTRACT */}
       <section className={`${styles.sectionCard} ${styles.animateFadeInUp}`} style={{animationDelay: '0.1s'}}>
         <div className={styles.sectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
@@ -276,7 +236,6 @@ const PracticeLab = () => {
             <h3>Upload Content</h3>
             <p>Drag & drop a PDF or paste your text.</p>
           </div>
-          {/* Draft Indicator */}
           {(textInput.trim() || draftFileMeta) && !uploadedFile && (
              <span style={{ fontSize: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 Draft Restored
@@ -294,7 +253,6 @@ const PracticeLab = () => {
               Choose File
             </label>
             
-            {/* Intelligent File Display */}
             <div className={styles.fileMeta} style={{ color: uploadedFile ? '#10b981' : (draftFileMeta ? '#f59e0b' : '#94a3b8') }}>
                 {uploadedFile 
                     ? <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'}}><CheckCircle2 size={14}/> {uploadedFile.name} ready!</span> 
@@ -331,7 +289,6 @@ const PracticeLab = () => {
         {saveSuccess && <div className={styles.successMessage}>{saveSuccess}</div>}
       </section>
 
-      {/* SAVE FILE MODAL */}
       {isFileModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalCard}>
@@ -349,7 +306,6 @@ const PracticeLab = () => {
 
       <div className={styles.splitGrid}>
         
-        {/* STEP 2: MODE SELECTION */}
         <section className={`${styles.sectionCard} ${styles.animateFadeInUp}`} style={{animationDelay: '0.2s'}}>
           <div className={styles.sectionHeader}>
             <div className={styles.stepBadge}>Step 2</div>
@@ -365,7 +321,6 @@ const PracticeLab = () => {
           </div>
         </section>
 
-        {/* STEP 3: SETTINGS */}
         <section className={`${styles.sectionCard} ${styles.animateFadeInUp}`} style={{animationDelay: '0.3s'}}>
           <div className={styles.sectionHeader}>
             <div className={styles.stepBadge}>Step 3</div>
@@ -386,15 +341,27 @@ const PracticeLab = () => {
               </div>
             </div>
 
-            <div className={styles.settingRow}>
-              <div>
-                <span className={styles.settingLabel}>Number of Questions</span>
-                <input type="number" min="5" max="50" value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))} className={styles.numberInput} />
+            {/* FIX: Hide Questions Input if Study Notes is selected */}
+            {activeMode !== 'Study Notes' && (
+              <div className={styles.settingRow}>
+                <div>
+                  <span className={styles.settingLabel}>Number of Questions</span>
+                  <input type="number" min="5" max="50" value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))} className={styles.numberInput} />
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className={styles.settingRow}>
-              <div className={styles.timerToggle}><Timer size={18} /><span>Timer (Mock Test)</span></div>
+            <div className={styles.settingRow} style={{ alignItems: 'flex-start' }}>
+              <div>
+                 <div className={styles.timerToggle}><Timer size={18} /><span>Timer (Mock Test)</span></div>
+                 {/* FIX: Show Timer Input when toggle is ON */}
+                 {timerEnabled && (
+                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                       <input type="number" min="1" max="180" value={timerDuration} onChange={(e) => setTimerDuration(Number(e.target.value))} className={styles.numberInput} style={{ width: '80px', padding: '6px 10px' }} />
+                       <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Minutes</span>
+                    </div>
+                 )}
+              </div>
               <button className={timerEnabled ? styles.toggleActive : styles.toggleInactive} onClick={() => setTimerEnabled(!timerEnabled)}>
                 {timerEnabled ? 'On' : 'Off'}
               </button>

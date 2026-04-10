@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, TrendingUp, Clock, ArrowRight, BookOpen, Briefcase, Upload, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, TrendingUp, Clock, ArrowRight, BookOpen, Briefcase, Upload, Loader2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios'; 
 import UploadModal from '../../Components/common/UploadModal/UploadModal'; 
@@ -31,11 +31,8 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
         try {
-            const resMetrics = await axios.get('http://localhost:5000/api/insights/dashboard', { headers: { Authorization: `Bearer ${token}` } });
+            const resMetrics = await axios.get('http://localhost:5000/api/insights/dashboard');
             if (resMetrics.data.success) {
                 setMetrics(prev => ({...prev, ...resMetrics.data.data}));
             }
@@ -45,18 +42,18 @@ const Dashboard = () => {
         const endpoint = activeId ? `http://localhost:5000/api/syllabus/${activeId}` : 'http://localhost:5000/api/syllabus/latest';
         
         try {
-            const resRoadmap = await axios.get(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
+            const resRoadmap = await axios.get(endpoint);
             setRoadmap(resRoadmap.data);
         } catch { console.log("No roadmap data yet."); }
 
         try {
             const syllabusIdQuery = activeId || 'latest';
-            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`);
             setCareerData(resCareer.data);
         } catch { console.log("No career data yet."); }
 
         try {
-            const resAggregate = await axios.get('http://localhost:5000/api/syllabus/progress/aggregate', { headers: { 'Authorization': `Bearer ${token}` } });
+            const resAggregate = await axios.get('http://localhost:5000/api/syllabus/progress/aggregate');
             if(resAggregate.data) {
                 setAggregateProgress({ 
                     academic: resAggregate.data.academicProgress, 
@@ -273,7 +270,6 @@ const Dashboard = () => {
         }}
         className={styles.animateFadeInUp || ''}
       >
-        {/* AI INSIGHT TEASER (Clickable to Insights Page) */}
         <section 
           className={styles.insightCard} 
           onClick={() => navigate('/insights')}
@@ -292,11 +288,12 @@ const Dashboard = () => {
              <span className={styles.aiBadge}>AI Insight</span> <ArrowRight size={16} />
            </div>
            <p className={styles.insightText}>
-             "{userName}, you are making great progress! Try shifting Deep Work to your {metrics.peakTime !== 'Analyzing...' ? metrics.peakTime.split(' - ')[0] : 'optimal'} slot to maximize retention."
+             {metrics.totalSessions === 0 
+               ? `Welcome, ${userName}! Your AI growth engine is ready. Complete your first Focus Session to unlock personalized retention insights.` 
+               : `"${userName}, you are making great progress! Try shifting Deep Work to your ${metrics.peakTime !== 'Analyzing...' ? metrics.peakTime.split(' - ')[0] : 'optimal'} slot to maximize retention."`}
            </p>
         </section>
 
-        {/* FLOW STATE INDICATOR */}
         <section 
           className={styles.flowCard} 
           style={{ animationDelay: '0.6s', flex: '1', margin: 0 }}

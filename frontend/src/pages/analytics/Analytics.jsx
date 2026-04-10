@@ -3,37 +3,38 @@ import axios from 'axios';
 import { TrendingUp, Target, Zap, Clock, Activity, Loader2 } from 'lucide-react';
 import styles from './Analytics.module.css';
 
+// ✅ NEW: Helper function to generate the exact last 7 days dynamically
+const getDynamicLast7Days = () => {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const result = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    // Label index 0 (which is today) as 'Today', otherwise use the day name
+    result.push(i === 0 ? 'Today' : days[d.getDay()]);
+  }
+  return result;
+};
+
 const Analytics = () => {
   const [loading, setLoading] = useState(true);
   
-  // --- LIVE DATA STATE ---
   const [metrics, setMetrics] = useState({
     avgFocus: 0,
     consistencyData: [0, 0, 0, 0, 0, 0, 0],
     peakTime: "Analyzing...",
-    peakDesc: "Log a focus session to unlock AI timing insights."
+    peakDesc: "Log a focus session to unlock AI timing insights.",
+    studyVelocity: 1.0 // 👈 Now defaults to 1.0 until backend loads
   });
   const [progress, setProgress] = useState({ academic: 0, career: 0 });
 
-  // --- FETCH DATA ON MOUNT ---
   useEffect(() => {
     const fetchAnalyticsData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setLoading(false);
-          return;
-        }
-
-        // Fetch Both Insights and Aggregate Progress simultaneously
         const [resMetrics, resProgress] = await Promise.all([
-          axios.get('http://localhost:5000/api/insights/dashboard', { 
-            headers: { Authorization: `Bearer ${token}` } 
-          }).catch(() => ({ data: { data: null } })), // Catch individual failures safely
-          
-          axios.get('http://localhost:5000/api/syllabus/progress/aggregate', { 
-            headers: { Authorization: `Bearer ${token}` } 
-          }).catch(() => ({ data: { academicProgress: 0, careerProgress: 0 } }))
+          // Secure cookies mean we don't need to pass headers manually!
+          axios.get('http://localhost:5000/api/insights/dashboard').catch(() => ({ data: { data: null } })),
+          axios.get('http://localhost:5000/api/syllabus/progress/aggregate').catch(() => ({ data: { academicProgress: 0, careerProgress: 0 } }))
         ]);
 
         if (resMetrics.data?.success && resMetrics.data?.data) {
@@ -58,8 +59,9 @@ const Analytics = () => {
   }, []);
 
   // --- DYNAMIC CALCULATIONS ---
-  // 1. Velocity: Scales dynamically based on average focus score
-  const velocityMultiplier = Math.max(0.8, (metrics.avgFocus / 70)).toFixed(1);
+  
+  // 1. Velocity: Now pulled directly from real Task completion data!
+  const velocityMultiplier = metrics.studyVelocity || 1.0;
   
   // 2. Active Streak: Count of days this week with a score > 0
   const activeDaysCount = metrics.consistencyData.filter(d => d > 0).length;
@@ -73,7 +75,7 @@ const Analytics = () => {
   const projectionColor = isAhead ? 'var(--success)' : 'var(--warning)';
 
   // 4. Bar Graph Mapper
-  const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dynamicDaysOfWeek = getDynamicLast7Days();
   const graphHeights = ['10%', '35%', '60%', '85%', '100%']; // Maps 0-4 intensity to CSS height
 
   if (loading) {
@@ -94,19 +96,19 @@ const Analytics = () => {
       {/* 1. KEY METRICS GRID */}
       <section className={styles.metricsGrid}>
         
-        {/* DYNAMIC VELOCITY CARD */}
         <div className={`${styles.metricCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.1s' }}>
           <div className={styles.cardIcon}><Zap size={20} /></div>
           <div className={styles.cardContent}>
             <h3>Study Velocity</h3>
             <div className={styles.bigValue}>{velocityMultiplier}x</div>
             <p className={styles.subText}>
-              {velocityMultiplier >= 1.0 ? 'You are learning faster than estimated.' : 'Your learning pace is slightly below average.'}
+              {velocityMultiplier >= 1.0 
+                ? 'You are learning faster than estimated.' 
+                : 'Your learning pace is slightly below average.'}
             </p>
           </div>
         </div>
 
-        {/* DYNAMIC CONSISTENCY CARD */}
         <div className={`${styles.metricCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.2s' }}>
           <div className={styles.cardIcon}><Activity size={20} /></div>
           <div className={styles.cardContent}>
@@ -116,7 +118,6 @@ const Analytics = () => {
           </div>
         </div>
 
-        {/* DYNAMIC GOAL PROJECTION */}
         <div className={`${styles.metricCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.3s' }}>
           <div className={styles.cardIcon}><Target size={20} /></div>
           <div className={styles.cardContent}>
@@ -132,7 +133,6 @@ const Analytics = () => {
       {/* 2. GRAPHS SECTION */}
       <section className={styles.chartsRow}>
         
-        {/* LIVE RETENTION CURVE */}
         <div className={`${styles.chartCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.4s' }}>
           <div className={styles.chartHeader}>
             <h3>Retention Curve</h3>
@@ -140,7 +140,7 @@ const Analytics = () => {
           </div>
           <div className={styles.graphContainer}>
             
-            {/* Dynamically map the 7-day array from your database */}
+            {/* Dynamically map the 7-day array to the EXACT days of the week */}
             {metrics.consistencyData.map((intensityLevel, index) => (
               <div key={index} className={styles.barGroup}>
                 <div 
@@ -151,8 +151,9 @@ const Analytics = () => {
                     animationDelay: `${0.5 + (index * 0.1)}s` 
                   }}
                 ></div>
-                <span className={styles.animateFadeInUp} style={{ animationDelay: `${0.5 + (index * 0.1)}s` }}>
-                  {daysOfWeek[index]}
+                {/* Check out the label! It maps to our dynamic array now. */}
+                <span className={styles.animateFadeInUp} style={{ animationDelay: `${0.5 + (index * 0.1)}s`, color: index === 6 ? '#f8fafc' : '#94a3b8', fontWeight: index === 6 ? 'bold' : 'normal' }}>
+                  {dynamicDaysOfWeek[index]}
                 </span>
               </div>
             ))}
@@ -160,7 +161,6 @@ const Analytics = () => {
           </div>
         </div>
 
-        {/* LIVE FLOW STATE */}
         <div className={`${styles.chartCard} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.5s' }}>
           <div className={styles.chartHeader}>
             <h3>Flow State Clusters</h3>
