@@ -1,7 +1,7 @@
 // backend/cron/weeklySummary.js
 const cron = require('node-cron');
 const db = require('../config/db');
-const transporter = require('../utils/mailer');
+const {transporter} = require('../utils/mailer');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 require("dotenv").config();

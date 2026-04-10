@@ -1,14 +1,21 @@
--- 1. Create and use the database
-CREATE DATABASE IF NOT EXISTS insighted;
+-- 1. Wipe the slate clean and start fresh
+DROP DATABASE IF EXISTS insighted;
+CREATE DATABASE insighted;
 USE insighted;
 
--- 2. Core Users Table
+-- 2. Core Users Table (NOW WITH VERIFICATION BUILT IN!)
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(50) DEFAULT 'student',
+    
+    -- 🛡️ NEW VERIFICATION COLUMNS
+    is_verified BOOLEAN DEFAULT FALSE,
+    verification_otp VARCHAR(6) NULL,
+    otp_expires_at DATETIME NULL,
+    
     email_notifications BOOLEAN DEFAULT TRUE,
     parent_email VARCHAR(255) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -24,7 +31,7 @@ CREATE TABLE IF NOT EXISTS syllabuses (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- 4. Career Goals Table (Subject-Specific & Global)
+-- 4. Career Goals Table 
 CREATE TABLE IF NOT EXISTS career_goals (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL, 
@@ -81,7 +88,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- 8. Study Sessions Table (For Heatmap & Analytics)
+-- 8. Study Sessions Table 
 CREATE TABLE IF NOT EXISTS study_sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -128,7 +135,7 @@ CREATE TABLE IF NOT EXISTS ai_cache (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 12. Indexes for Performance (Run these only once)
+-- 12. Indexes for Performance 
 CREATE INDEX idx_library_user_category ON library_items(user_id, category);
 CREATE INDEX idx_tasks_user_status ON tasks(user_id, status);
 CREATE INDEX idx_tasks_deadline ON tasks(deadline);

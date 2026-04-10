@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, TrendingUp, Clock, ArrowRight, BookOpen, Briefcase, Upload, Loader2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios'; 
+import { Joyride, STATUS } from 'react-joyride';// 👈 IMPORT JOYRIDE
 import UploadModal from '../../Components/common/UploadModal/UploadModal'; 
 import SubjectLibrary from '../../Components/common/SubjectLibrary/SubjectLibrary';
 import ActivityGraph from '../../Components/common/Heatmap/ActivityGraph';
@@ -10,11 +11,9 @@ import styles from './Dashboard.module.css';
 const Dashboard = () => {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false); 
-
   const [loading, setLoading] = useState(true); 
   const [roadmap, setRoadmap] = useState(null);
   const [careerData, setCareerData] = useState(null);
-  
   const [aggregateProgress, setAggregateProgress] = useState({ academic: 0, career: 0, details: [] });
   const [expandedTracks, setExpandedTracks] = useState({ academic: false, career: false });
   
@@ -28,14 +27,45 @@ const Dashboard = () => {
 
   const userName = localStorage.getItem('userName') || 'There';
 
+  // --- 🪄 TOUR STATE & STEPS ---
+  const [runTour, setRunTour] = useState(false);
+  const tourSteps = [
+    {
+      target: '#tour-upload-btn',
+      content: (
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Welcome to InsightED! 🚀</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>Let's build your personalized AI learning path. Click here to upload your first university syllabus to get started.</p>
+        </div>
+      ),
+      disableBeacon: true, // Show instantly
+    },
+    {
+      target: '#tour-academic-track',
+      content: (
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Track Your Progress 📈</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>As you study, the AI will update your Academic and Career progress in real-time here.</p>
+        </div>
+      ),
+    },
+    {
+      target: '#tour-ai-insight',
+      content: (
+        <div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Your AI Mentor 🧠</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>We analyze your focus and retention to give you daily tips. Complete your first Focus Session to see it in action!</p>
+        </div>
+      ),
+    }
+  ];
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         try {
             const resMetrics = await axios.get('http://localhost:5000/api/insights/dashboard');
-            if (resMetrics.data.success) {
-                setMetrics(prev => ({...prev, ...resMetrics.data.data}));
-            }
+            if (resMetrics.data.success) setMetrics(prev => ({...prev, ...resMetrics.data.data}));
         } catch { console.log("No analytics data yet."); }
 
         const activeId = localStorage.getItem('activeSyllabusId');
@@ -67,11 +97,27 @@ const Dashboard = () => {
         console.error("Dashboard fetch error:", error);
       } finally {
         setLoading(false);
+        
+        // 🪄 Check if the user is new and hasn't seen the tour yet
+        const hasSeenTour = localStorage.getItem('hasSeenTour');
+        if (!hasSeenTour) {
+           setTimeout(() => setRunTour(true), 500); // Small delay so UI loads first
+        }
       }
     };
 
     fetchDashboardData();
   }, []);
+
+  const handleTourCallback = (data) => {
+    const { status } = data;
+    const finishedStatuses = [STATUS.FINISHED, STATUS.SKIPPED];
+    if (finishedStatuses.includes(status)) {
+      // Mark as seen so it never runs again for this user!
+      localStorage.setItem('hasSeenTour', 'true');
+      setRunTour(false);
+    }
+  };
 
   const handleRoadmapReady = (newSyllabusId) => {
     if (newSyllabusId && typeof newSyllabusId === 'string') {
@@ -144,6 +190,38 @@ const Dashboard = () => {
   return (
     <div className={styles.dashboardGrid}>
       
+      {/* 🪄 THE JOYRIDE COMPONENT (Invisible until triggered) */}
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        continuous={true}
+        showSkipButton={true}
+        callback={handleTourCallback}
+        styles={{
+          options: {
+            arrowColor: '#1e293b',
+            backgroundColor: '#1e293b',
+            overlayColor: 'rgba(15, 23, 42, 0.85)',
+            primaryColor: '#6366f1',
+            textColor: '#f8fafc',
+            zIndex: 1000,
+          },
+          buttonNext: {
+            backgroundColor: '#6366f1',
+            borderRadius: '8px',
+            fontSize: '0.9rem',
+            padding: '8px 16px'
+          },
+          buttonBack: {
+            color: '#cbd5e1',
+            marginRight: '8px'
+          },
+          buttonSkip: {
+            color: '#64748b'
+          }
+        }}
+      />
+
       <section className={`${styles.heroSection} ${styles.animateFadeInUp || ''}`}>
         <div className={styles.heroHeader}>
           <span className={styles.heroBadge}>Dynamic Next Task</span>
@@ -155,6 +233,7 @@ const Dashboard = () => {
           </span>
           
           <button 
+            id="tour-upload-btn" // 👈 TARGET 1
             onClick={() => setIsModalOpen(true)}
             className={styles.btnPulseHover || ''}
             style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.8rem', fontWeight: '500'}}
@@ -192,7 +271,12 @@ const Dashboard = () => {
       </section>
 
       {/* --- ACADEMIC TRACK ACCORDION --- */}
-      <section className={`${styles.trackCard} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.2s', cursor: 'pointer', transition: 'all 0.3s ease' }} onClick={() => toggleTrack('academic')}>
+      <section 
+        id="tour-academic-track" // 👈 TARGET 2
+        className={`${styles.trackCard} ${styles.animateFadeInUp || ''}`} 
+        style={{ animationDelay: '0.2s', cursor: 'pointer', transition: 'all 0.3s ease' }} 
+        onClick={() => toggleTrack('academic')}
+      >
         <div className={styles.cardHeader}>
           <div className={styles.trackTitle}>
             <BookOpen size={18} /> <h3 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>Overall Academic</h3>
@@ -271,6 +355,7 @@ const Dashboard = () => {
         className={styles.animateFadeInUp || ''}
       >
         <section 
+          id="tour-ai-insight" // 👈 TARGET 3
           className={styles.insightCard} 
           onClick={() => navigate('/insights')}
           style={{ 
@@ -303,7 +388,6 @@ const Dashboard = () => {
         </section>
       </div>
 
-      {/* DYNAMIC CONSISTENCY GRAPH & HEATMAP */}
       <section className={`${styles.consistencySection} ${styles.animateFadeInUp || ''}`} style={{ animationDelay: '0.4s', gridColumn: '1 / -1', width: '100%' }}>
         <div className={styles.sectionTitle} style={{ marginBottom: '16px' }}>
             <TrendingUp size={18} /> <span>Focus & Consistency</span>
