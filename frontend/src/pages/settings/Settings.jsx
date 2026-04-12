@@ -108,12 +108,11 @@ const Settings = () => {
 
     if (key === 'emailNotifs') {
       try {
-        const token = localStorage.getItem('token');
         const newEmailState = !preferences.emailNotifs; 
         
         await axios.put('http://localhost:5000/api/users/preferences', 
           { emailNotifs: newEmailState },
-          { headers: { Authorization: `Bearer ${token}` } }
+          { withCredentials: true } // 🛡️ Using secure cookie
         );
       } catch (error) {
         console.error("Failed to save email preference to database:", error);
@@ -125,10 +124,9 @@ const Settings = () => {
   const handleSaveParentEmail = async () => {
     setIsParentSaving(true);
     try {
-      const token = localStorage.getItem('token');
       await axios.put('http://localhost:5000/api/users/parent-email', 
         { parentEmail },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { withCredentials: true } // 🛡️ Using secure cookie
       );
       localStorage.setItem('parentEmail', parentEmail);
       alert("Guardian email saved successfully!"); 
@@ -145,33 +143,58 @@ const Settings = () => {
     setPasswords(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleUpdatePassword = (e) => {
+  const handleUpdatePassword = async (e) => {
     e.preventDefault();
     if (!passwords.current || !passwords.new) {
       setSecMessage({ type: 'error', text: 'Please fill out both fields.' });
       return;
     }
-    if (passwords.new.length < 6) {
-      setSecMessage({ type: 'error', text: 'New password must be at least 6 characters.' });
+    if (passwords.new.length < 8) {
+      setSecMessage({ type: 'error', text: 'New password must be at least 8 characters.' });
       return;
     }
 
     setIsSecSaving(true);
     setSecMessage({ type: '', text: '' });
 
-    setTimeout(() => {
-      setIsSecSaving(false);
-      setSecMessage({ type: 'success', text: 'Password securely updated!' });
+    try {
+      // 🛡️ THE REAL API CALL
+      const response = await axios.put('http://localhost:5000/api/users/update-password', {
+        currentPassword: passwords.current,
+        newPassword: passwords.new
+      }, { withCredentials: true });
+
+      setSecMessage({ type: 'success', text: response.data.message || 'Password securely updated!' });
       setPasswords({ current: '', new: '' });
+    } catch (error) {
+      setSecMessage({ type: 'error', text: error.response?.data?.message || 'Failed to update password.' });
+    } finally {
+      setIsSecSaving(false);
       setTimeout(() => setSecMessage({ type: '', text: '' }), 4000);
-    }, 1200);
+    }
   };
 
-  const handleDeleteAccount = () => {
-    const isConfirmed = window.confirm("Are you absolutely sure you want to delete your account? This action cannot be undone and all roadmap data will be lost.");
+  // --- 4. SMART DELETE HANDLING ---
+  const handleDeleteAccount = async () => {
+    const isConfirmed = window.confirm("Are you sure you want to deactivate your account? You will lose access to your personal data, though shared cached materials may remain active for the community.");
+    
     if (isConfirmed) {
-      localStorage.clear(); 
-      navigate('/login');   
+      try {
+        // Tell the backend to flip the is_active switch to false
+        await axios.delete('http://localhost:5000/api/users/delete-account', { withCredentials: true });
+        
+        // 🛡️ THE SMART CLEAR: Wipes user data but protects Tour Guides and Preferences!
+        Object.keys(localStorage).forEach(key => {
+            if (!key.startsWith('hasSeen') && key !== 'appPreferences' && key !== 'darkMode') {
+                localStorage.removeItem(key);
+            }
+        });
+        
+        navigate('/login');   
+      } catch (error) {
+        console.error("Failed to deactivate account:", error);
+        alert("An error occurred while trying to deactivate your account. Please try again.");
+      }
     }
   };
 
@@ -387,9 +410,9 @@ const Settings = () => {
 
               <div className={styles.dangerZone}>
                 <h3>Danger Zone</h3>
-                <p>Once you delete your account, there is no going back. All roadmap data will be wiped permanently.</p>
+                <p>Once you deactivate your account, your personal data becomes inaccessible, but cached materials will remain.</p>
                 <button type="button" onClick={handleDeleteAccount} className={`${styles.deleteBtn} ${styles.btnPulseHover}`}>
-                  <LogOut size={16} /> Delete Account
+                  <LogOut size={16} /> Deactivate Account
                 </button>
               </div>
             </div>

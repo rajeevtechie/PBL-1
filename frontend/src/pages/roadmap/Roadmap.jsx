@@ -4,8 +4,9 @@ import {
   BookOpen, Briefcase, CheckCircle, Circle, Lock, 
   AlertTriangle, Loader2, ChevronRight, Sparkles, Edit2, GraduationCap, ChevronDown
 } from 'lucide-react';
-import { Joyride, STATUS } from 'react-joyride'; // 👈 IMPORT JOYRIDE
+import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import styles from './Roadmap.module.css';
+import { markTourCompleted } from '../../utils/tourSync'; // Adjust path if needed!
 
 const Roadmap = () => {
   const [roadmap, setRoadmap] = useState(null);
@@ -28,6 +29,7 @@ const Roadmap = () => {
   const tourSteps = [
     {
       target: '#tour-academic',
+      placement: 'center', // 🛡️ FIX: Center over the column to prevent overflow
       content: (
         <div>
           <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Your Academic Path 📚</h3>
@@ -38,6 +40,7 @@ const Roadmap = () => {
     },
     {
       target: '#tour-career',
+      placement: 'center', // 🛡️ FIX: Center over the column to prevent overflow
       content: (
         <div>
           <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Bridge the Gap 🌉</h3>
@@ -54,7 +57,7 @@ const Roadmap = () => {
   useEffect(() => {
     const fetchSubjectList = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/syllabus/list');
+            const res = await axios.get('http://localhost:5000/api/syllabus/list', { withCredentials: true });
             setSubjectList(res.data);
         } catch (err) {
             console.error("Failed to load subject list", err);
@@ -63,6 +66,7 @@ const Roadmap = () => {
     fetchSubjectList();
   }, []);
 
+  // 1. Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -73,7 +77,7 @@ const Roadmap = () => {
             ? `http://localhost:5000/api/syllabus/latest` 
             : `http://localhost:5000/api/syllabus/${activeId}`;
 
-        const resSyllabus = await axios.get(endpoint);
+        const resSyllabus = await axios.get(endpoint, { withCredentials: true });
         setRoadmap(resSyllabus.data);
 
         if (activeId === 'latest' && resSyllabus.data.id) {
@@ -83,7 +87,7 @@ const Roadmap = () => {
 
         try {
             const syllabusIdQuery = resSyllabus.data.id || activeId;
-            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`);
+            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`, { withCredentials: true });
             
             setCareerData(resCareer.data);
             if (resCareer.data.targetRole) {
@@ -100,24 +104,35 @@ const Roadmap = () => {
         setError(err.response?.status === 404 ? "No roadmap found. Upload a syllabus first!" : "Failed to load your learning path.");
       } finally {
         setLoading(false);
-        
-        // 🪄 Check if they have seen the Roadmap tour
-        if (!localStorage.getItem('hasSeenRoadmapTour') && !error) {
-          setTimeout(() => setRunTour(true), 600);
-        }
       }
     };
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
-  const handleTourCallback = (data) => {
-    const { status } = data;
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
-      localStorage.setItem('hasSeenRoadmapTour', 'true');
-      setRunTour(false);
+  // 2. 🛡️ THE ARCHITECTURE FIX: Bulletproof Tour Trigger (DOM Polling)
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('hasSeenRoadmapTour');
+
+    // Only start polling if they haven't seen it, there is no error, and loading is finished
+    if (!hasSeenTour && !error && !loading) {
+      const checkDOM = setInterval(() => {
+        const targetEl = document.querySelector('#tour-academic');
+        
+        if (targetEl) {
+          setRunTour(true);        // Start the tour!
+          
+          // 🛡️ THE SPEEDRUNNER FIX: Mark as seen the exact millisecond it fires
+          markTourCompleted('hasSeenRoadmapTour');
+          
+          clearInterval(checkDOM); // Stop checking!
+        }
+      }, 100);
+
+      // Cleanup function prevents memory leaks if user navigates away
+      return () => clearInterval(checkDOM); 
     }
-  };
+  }, [loading, error]);
+
 
   const handleAnalyzeGaps = async () => {
     if (!targetRole.trim()) {
@@ -127,7 +142,7 @@ const Roadmap = () => {
     setAnalyzing(true);
     try {
         const currentId = roadmap?.id || activeId; 
-        const response = await axios.post(`http://localhost:5000/api/syllabus/${currentId}/analyze`, { targetRole: targetRole, isGlobal: isGlobal, syllabusId: currentId });
+        const response = await axios.post(`http://localhost:5000/api/syllabus/${currentId}/analyze`, { targetRole: targetRole, isGlobal: isGlobal, syllabusId: currentId }, { withCredentials: true });
         
         setCareerData({ targetRole: targetRole, recommendations: response.data.recommendations });
         setIsEditingGoal(false);
@@ -150,7 +165,7 @@ const Roadmap = () => {
 
     try {
         const currentId = roadmap?.id || activeId;
-        await axios.put(`http://localhost:5000/api/syllabus/${currentId}/structure`, { structure: updatedRoadmap });
+        await axios.put(`http://localhost:5000/api/syllabus/${currentId}/structure`, { structure: updatedRoadmap }, { withCredentials: true });
     } catch (err) {
         console.error("Failed to update academic progress", err);
         alert("Failed to save progress. Reverting change.");
@@ -166,7 +181,7 @@ const Roadmap = () => {
         setCareerData(prev => ({
             ...prev, recommendations: prev.recommendations.map(rec => rec.id === recId ? { ...rec, is_completed: newStatus } : rec)
         }));
-        await axios.patch(`http://localhost:5000/api/syllabus/recommendation/${recId}/toggle`, { isCompleted: newStatus });
+        await axios.patch(`http://localhost:5000/api/syllabus/recommendation/${recId}/toggle`, { isCompleted: newStatus }, { withCredentials: true });
     } catch (err) {
         console.error("Failed to update status", err);
         alert("Failed to save progress.");
@@ -187,14 +202,14 @@ const Roadmap = () => {
   return (
     <div className={styles.roadmapContainer}>
       
-      {/* 🪄 JOYRIDE INJECTION */}
-      <Joyride
-        steps={tourSteps} run={runTour} continuous={true} showSkipButton={true} callback={handleTourCallback}
-        styles={{
-          options: { arrowColor: '#1e293b', backgroundColor: '#1e293b', overlayColor: 'rgba(15, 23, 42, 0.85)', primaryColor: '#6366f1', textColor: '#f8fafc', zIndex: 1000 },
-          buttonNext: { backgroundColor: '#6366f1', borderRadius: '8px', fontSize: '0.9rem', padding: '8px 16px' },
-          buttonBack: { color: '#cbd5e1', marginRight: '8px' }, buttonSkip: { color: '#64748b' }
-        }}
+      {/* 🪄 OUR NEW CLEAN REUSABLE COMPONENT */}
+      <TourGuide 
+        steps={tourSteps} 
+        run={runTour} 
+        onComplete={() => {
+          localStorage.setItem('hasSeenRoadmapTour', 'true');
+          setRunTour(false);
+        }} 
       />
 
       <header className={styles.header}>

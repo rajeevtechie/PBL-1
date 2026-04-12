@@ -68,7 +68,7 @@ const Register = () => {
   const handleRegister = async (e) => {
     e.preventDefault();
     
-    // 🛡️ EXPLICIT FRONTEND VALIDATION (Prevents silent browser failures)
+    // 🛡️ EXPLICIT FRONTEND VALIDATION
     if (!formData.name.trim()) return setError("Please enter your Full Name.");
     if (!formData.email.trim()) return setError("Please enter your Email Address.");
     if (!formData.password) return setError("Please create a Password.");
@@ -108,9 +108,9 @@ const Register = () => {
           });
 
           if (res.data.success) {
-              localStorage.setItem('user', JSON.stringify(res.data.user));
-              if (res.data.user?.name) localStorage.setItem('userName', res.data.user.name);
-              navigate('/dashboard');
+              // 🛡️ THE FIX: Wipe memory for the tour, and force them to login!
+              localStorage.clear();
+              navigate('/login');
           }
       } catch (err) {
           setError(err.response?.data?.message || 'Verification failed. Invalid code.');
@@ -169,7 +169,6 @@ const Register = () => {
 
           {error && !showOtpModal && <div className={styles.errorBox}><AlertCircle size={16} /> {error}</div>}
 
-          {/* 🛡️ ADDED noValidate so we can handle errors beautifully instead of silently! */}
           <form onSubmit={handleRegister} noValidate>
             <div className={styles.inputGroup}>
               <User size={20} className={styles.inputIcon} />
@@ -238,7 +237,8 @@ const Register = () => {
             <div className={styles.terms}>
               <label className={styles.checkbox}>
                 <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-                <span>I agree to the <Link to="/terms" className={styles.link}>Terms & Conditions</Link></span>
+                {/* 🛡️ THE FIX: target="_blank" and rel="noopener noreferrer" added here! */}
+                <span>I agree to the <Link to="/terms" target="_blank" rel="noopener noreferrer" className={styles.link}>Terms & Conditions</Link></span>
               </label>
             </div>
 

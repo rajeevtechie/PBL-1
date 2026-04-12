@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Square, CheckCircle, Clock, Save, RefreshCw } from 'lucide-react'; 
 import axios from 'axios';
-import { Joyride, STATUS } from 'react-joyride';
+import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import styles from './practise_lab.module.css';
+import { markTourCompleted } from '../../utils/tourSync'; // Adjust path if needed!
 
 const RESULTS_KEY = 'practiceQuizResults';
 const SELECTED_KEY = 'practiceSelectedTopics';
@@ -42,7 +43,6 @@ const PractiseQuiz = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(null);
 
-  // --- 🪄 TOUR STATE ---
   const [runTour, setRunTour] = useState(false);
   const tourSteps = [
     {
@@ -68,24 +68,32 @@ const PractiseQuiz = () => {
 
   const modeMap = { 'Quiz (MCQ)': 'quiz', 'Short Answer': 'short', 'Long Answer': 'long', 'Case Study': 'case', 'Mock Test': 'mock', 'Study Notes': 'notes' };
 
+  // 1. Just load the data here
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem(RESULTS_KEY) || '[]');
     const loadedItems = normalizeStoredResults(stored, settings.mode);
     setItems(loadedItems);
-    
-    if (!localStorage.getItem('hasSeenPracticeQuizTour') && loadedItems.length > 0 && settings.mode !== 'Study Notes') {
-        setTimeout(() => setRunTour(true), 600);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [settings.mode]);
 
-  const handleTourCallback = (data) => {
-    const { status } = data;
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
-      localStorage.setItem('hasSeenPracticeQuizTour', 'true');
-      setRunTour(false);
+  // 2. 🛡️ THE ARCHITECTURE FIX: Bulletproof Tour Trigger
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('hasSeenPracticeQuizTour');
+    
+    // Only run if there is content, it's not just study notes, and they haven't seen it
+    if (!hasSeenTour && items.length > 0 && settings.mode !== 'Study Notes') {
+        const checkDOM = setInterval(() => {
+            const targetEl = document.querySelector('#tour-quiz-timer');
+            if (targetEl) {
+                setRunTour(true);
+                // 🛡️ THE SPEEDRUNNER FIX
+                markTourCompleted('hasSeenPracticeQuizTour');
+                clearInterval(checkDOM);
+            }
+        }, 100);
+
+        return () => clearInterval(checkDOM);
     }
-  };
+  }, [items, settings.mode]);
 
   useEffect(() => {
     if (items.length > 0 && targetMinutes > 0 && !isFocusActive && studiedSeconds === 0 && !sessionStartTime && !isSubmitted) {
@@ -173,7 +181,6 @@ const PractiseQuiz = () => {
       try {
         const subjectName = localStorage.getItem('practiceSubject') || 'Practice Review';
         
-        // 🛡️ Added withCredentials to securely sync focus scores to dashboard
         await axios.post('http://localhost:5000/api/practice/log-session', {
           subjectName: subjectName, startTime: sessionStartTime || new Date().toISOString(),
           endTime: new Date().toISOString(), durationMinutes: Math.max(durationMinutes, 1), focusScore: finalScore 
@@ -204,7 +211,6 @@ const PractiseQuiz = () => {
 
     setIsGenerating(true);
     try {
-      // 🛡️ Added withCredentials for AI generation call
       const response = await axios.post('http://localhost:5000/api/practice/generate', payload, { withCredentials: true });
       
       const nextItems = Array.isArray(response.data.data) ? response.data.data : [];
@@ -223,7 +229,6 @@ const PractiseQuiz = () => {
     try {
       const payload = { title: titleValue.trim(), type: selectedMode, category: localStorage.getItem('practiceSubject') || 'General', content: { items, meta: { mode: settings.mode } } };
       
-      // 🛡️ Added withCredentials
       await axios.post('http://localhost:5000/api/library/save-content', payload, { withCredentials: true });
       
       setIsSaveModalOpen(false); setSaveSuccess('Saved to library.');
@@ -271,13 +276,13 @@ const PractiseQuiz = () => {
   return (
     <div className={styles.quizContainer}>
       
-      <Joyride
-        steps={tourSteps} run={runTour} continuous={true} showSkipButton={true} callback={handleTourCallback}
-        styles={{
-          options: { arrowColor: '#1e293b', backgroundColor: '#1e293b', overlayColor: 'rgba(15, 23, 42, 0.85)', primaryColor: '#6366f1', textColor: '#f8fafc', zIndex: 1000 },
-          buttonNext: { backgroundColor: '#6366f1', borderRadius: '8px', fontSize: '0.9rem', padding: '8px 16px' },
-          buttonBack: { color: '#cbd5e1', marginRight: '8px' }, buttonSkip: { color: '#64748b' }
-        }}
+      <TourGuide 
+        steps={tourSteps} 
+        run={runTour} 
+        onComplete={() => {
+          localStorage.setItem('hasSeenPracticeQuizTour', 'true');
+          setRunTour(false);
+        }} 
       />
 
       <header id="tour-quiz-timer" className={`${styles.quizHeader} ${styles.animateFadeInUp}`} style={{ alignItems: 'center', background: '#1e293b', padding: '20px', borderRadius: '16px', border: isFocusActive ? '1px solid #10b981' : '1px solid #334155' }}>

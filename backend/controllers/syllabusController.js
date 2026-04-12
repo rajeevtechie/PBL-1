@@ -8,6 +8,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
 // --- 1. UPLOAD & ANALYZE SYLLABUS ---
 // --- 1. UPLOAD & ANALYZE SYLLABUS (NOW WITH PDF CACHING!) ---
+// --- 1. UPLOAD & ANALYZE SYLLABUS (NOW WITH PDF CACHING!) ---
 exports.uploadSyllabus = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -16,7 +17,6 @@ exports.uploadSyllabus = async (req, res) => {
         console.log(`📤 Processing file: ${req.file.originalname} for User ID: ${userId}`);
 
         // ⚡ 1. GENERATE A UNIQUE FINGERPRINT FOR THE PDF
-        // This creates a unique string based on the actual contents of the file
         const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
         const cacheKey = `pdf_${fileHash}`;
 
@@ -32,9 +32,15 @@ exports.uploadSyllabus = async (req, res) => {
             console.log(`🐢 CACHE MISS. First time seeing this PDF. Asking Gemini...`);
             
             const filePart = { inlineData: { data: req.file.buffer.toString("base64"), mimeType: req.file.mimetype } };
+            
+            // 🛡️ THE FIX: We added strict Title Sanitization Rules to the Prompt!
             const prompt = `
             System: You are the InsightED academic curriculum parser. 
             Task: Analyze this syllabus file and extract the course structure.
+            
+            CRITICAL RULE FOR courseTitle: Extract the core subject name ONLY. Strip out all filler words like "Syllabus of", "Course at", "Undergraduate", "Post Graduate", "Level", "Department of", "Semester", etc. 
+            Keep it to 1-4 words max. (Example: If the text says "Syllabus of Cyber Security Course at Undergraduate level", you must output exactly "Cyber Security").
+
             Output Format: Strictly JSON. No markdown. No intro text.
             Schema: { "courseTitle": "string", "units": [ { "unitNumber": number, "title": "string", "topics": ["string", "string"], "is_completed": false } ] }
             `;

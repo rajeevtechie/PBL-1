@@ -3,7 +3,7 @@ DROP DATABASE IF EXISTS insighted;
 CREATE DATABASE insighted;
 USE insighted;
 
--- 2. Core Users Table (NOW WITH VERIFICATION BUILT IN!)
+-- 2. Core Users Table 
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -11,13 +11,17 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(50) DEFAULT 'student',
     
-    -- 🛡️ NEW VERIFICATION COLUMNS
+    -- 🛡️ VERIFICATION COLUMNS
     is_verified BOOLEAN DEFAULT FALSE,
     verification_otp VARCHAR(6) NULL,
     otp_expires_at DATETIME NULL,
     
+    -- 🛡️ APP PREFERENCES & STATE
     email_notifications BOOLEAN DEFAULT TRUE,
     parent_email VARCHAR(255) DEFAULT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    tour_flags JSON DEFAULT ('{}'), -- 🌟 The Enterprise Hybrid Sync Data
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
