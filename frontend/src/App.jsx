@@ -26,10 +26,7 @@ import Settings from './pages/settings/Settings';
 
 // === STANDALONE PAGES ===
 import StudySession from './pages/study/StudySession'; 
-import axios from 'axios';
 
-// 🛡️ Tell Axios to automatically pack HttpOnly cookies into every request
-axios.defaults.withCredentials = true;
 function App() {
   return (
     // 🌟 WRAPPING THE ENTIRE APP IN THE FOCUS PROVIDER 🌟

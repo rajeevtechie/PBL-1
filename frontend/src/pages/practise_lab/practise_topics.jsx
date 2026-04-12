@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ListChecks } from 'lucide-react';
-import { Joyride, STATUS } from 'react-joyride';
+import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import styles from './practise_lab.module.css';
+import { markTourCompleted } from '../../utils/tourSync'; // Adjust path if needed!
 
 const TOPICS_KEY = 'practiceTopics';
 const SELECTED_KEY = 'practiceSelectedTopics';
@@ -10,7 +11,6 @@ const SELECTED_KEY = 'practiceSelectedTopics';
 const PractiseTopics = () => {
   const navigate = useNavigate();
   
-  // 🛡️ FIX: Lazy Initialization (Reads localStorage directly when state is created)
   const [topics] = useState(() => {
     const storedTopics = JSON.parse(localStorage.getItem(TOPICS_KEY) || '[]');
     return Array.isArray(storedTopics) ? storedTopics : [];
@@ -21,7 +21,6 @@ const PractiseTopics = () => {
     return Array.isArray(storedSelected) ? storedSelected : [];
   });
 
-  // --- 🪄 TOUR STATE ---
   const [runTour, setRunTour] = useState(false);
   const tourSteps = [
     {
@@ -36,21 +35,24 @@ const PractiseTopics = () => {
     }
   ];
 
-  // Tour Trigger Effect
+  // 🛡️ THE ARCHITECTURE FIX: Bulletproof Tour Trigger
   useEffect(() => {
-    if (!localStorage.getItem('hasSeenPracticeTopicsTour') && topics.length > 0) {
-        setTimeout(() => setRunTour(true), 400);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const hasSeenTour = localStorage.getItem('hasSeenPracticeTopicsTour');
+    
+    if (!hasSeenTour && topics.length > 0) {
+        const checkDOM = setInterval(() => {
+            const targetEl = document.querySelector('#tour-topic-selector');
+            if (targetEl) {
+                setRunTour(true);
+                // 🛡️ THE SPEEDRUNNER FIX
+                markTourCompleted('hasSeenPracticeTopicsTour');
+                clearInterval(checkDOM);
+            }
+        }, 100);
 
-  const handleTourCallback = (data) => {
-    const { status } = data;
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
-      localStorage.setItem('hasSeenPracticeTopicsTour', 'true');
-      setRunTour(false);
+        return () => clearInterval(checkDOM);
     }
-  };
+  }, [topics]);
 
   const allTopicsSelected = topics.length > 0 && selectedTopics.length === topics.length;
 
@@ -79,13 +81,13 @@ const PractiseTopics = () => {
   return (
     <div className={styles.topicOnlyContainer}>
       
-      <Joyride
-        steps={tourSteps} run={runTour} continuous={true} showSkipButton={true} callback={handleTourCallback}
-        styles={{
-          options: { arrowColor: '#1e293b', backgroundColor: '#1e293b', overlayColor: 'rgba(15, 23, 42, 0.85)', primaryColor: '#6366f1', textColor: '#f8fafc', zIndex: 1000 },
-          buttonNext: { backgroundColor: '#6366f1', borderRadius: '8px', fontSize: '0.9rem', padding: '8px 16px' },
-          buttonBack: { color: '#cbd5e1', marginRight: '8px' }, buttonSkip: { color: '#64748b' }
-        }}
+      <TourGuide 
+        steps={tourSteps} 
+        run={runTour} 
+        onComplete={() => {
+          localStorage.setItem('hasSeenPracticeTopicsTour', 'true');
+          setRunTour(false);
+        }} 
       />
 
       <header className={styles.topicOnlyHeader}>

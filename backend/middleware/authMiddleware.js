@@ -13,17 +13,25 @@ module.exports = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         // 🛡️ 3. THE GHOST KILLER: Check the Database!
-        // We ensure the user still exists AND has verified their email
-        const [users] = await db.execute('SELECT is_verified FROM users WHERE id = ?', [decoded.id]);
+        // We now fetch both verification status AND the active status
+        const [users] = await db.execute('SELECT is_verified, is_active FROM users WHERE id = ?', [decoded.id]);
         
         if (users.length === 0) {
-            // The DB was wiped or user was deleted! Clear the dead cookie.
+            // The DB was wiped or user was hard-deleted! Clear the dead cookie.
             res.clearCookie('token');
             return res.status(401).json({ message: "Account no longer exists." });
         }
 
+        const user = users[0];
+
+        // 🛡️ VULNERABILITY 1 PATCHED: Block deactivated accounts from using old tokens
+        if (user.is_active === 0 || user.is_active === false) {
+            res.clearCookie('token');
+            return res.status(403).json({ message: "Access denied. Account is deactivated." });
+        }
+
         // Block them if they bypassed the OTP step (unless they are a Demo Guest)
-        if (decoded.role !== 'guest' && users[0].is_verified === 0) {
+        if (decoded.role !== 'guest' && user.is_verified === 0) {
             res.clearCookie('token');
             return res.status(403).json({ message: "Account not verified." });
         }

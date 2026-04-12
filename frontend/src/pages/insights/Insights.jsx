@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Lightbulb, TrendingUp, AlertTriangle, ArrowRight, Send, Loader2, CheckCircle, Sparkles } from 'lucide-react';
-import { Joyride, STATUS } from 'react-joyride'; // 👈 IMPORT JOYRIDE
+import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import styles from './Insights.module.css';
+import { markTourCompleted } from '../../utils/tourSync'; // Adjust path if needed!
 
 const Insights = () => {
   const navigate = useNavigate();
@@ -31,6 +32,7 @@ const Insights = () => {
   const tourSteps = [
     {
       target: '#tour-feed',
+      placement: 'center', // 🛡️ FIX: 'center' prevents the tooltip from overflowing the flexbox edges!
       content: (
         <div>
           <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Real-time Feed 📡</h3>
@@ -41,6 +43,7 @@ const Insights = () => {
     },
     {
       target: '#tour-mentor',
+      placement: 'center', // 🛡️ FIX: Beautifully centers over the chat window.
       content: (
         <div>
           <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Your Personal Mentor 🤖</h3>
@@ -50,12 +53,13 @@ const Insights = () => {
     }
   ];
 
+  // 1. Fetch Data
   useEffect(() => {
     const fetchInsightsData = async () => {
       try {
         const [resMetrics, resCareer] = await Promise.all([
-          axios.get('http://localhost:5000/api/insights/dashboard').catch(() => ({ data: { data: null } })),
-          axios.get('http://localhost:5000/api/syllabus/career-insights?syllabusId=latest').catch(() => ({ data: { recommendations: [] } }))
+          axios.get('http://localhost:5000/api/insights/dashboard', { withCredentials: true }).catch(() => ({ data: { data: null } })),
+          axios.get('http://localhost:5000/api/syllabus/career-insights?syllabusId=latest', { withCredentials: true }).catch(() => ({ data: { recommendations: [] } }))
         ]);
 
         if (resMetrics.data?.success && resMetrics.data?.data) {
@@ -70,23 +74,35 @@ const Insights = () => {
         console.error("Failed to fetch insights:", error);
       } finally {
         setLoading(false);
-        // 🪄 Check if they have seen the Insights tour
-        if (!localStorage.getItem('hasSeenInsightsTour')) {
-          setTimeout(() => setRunTour(true), 600);
-        }
       }
     };
 
     fetchInsightsData();
   }, []);
 
-  const handleTourCallback = (data) => {
-    const { status } = data;
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
-      localStorage.setItem('hasSeenInsightsTour', 'true');
-      setRunTour(false);
+  // 2. 🛡️ THE ARCHITECTURE FIX: Bulletproof Tour Trigger (DOM Polling)
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('hasSeenInsightsTour');
+
+    // Only start polling if they haven't seen it AND the data is fully loaded
+    if (!hasSeenTour && !loading) {
+      const checkDOM = setInterval(() => {
+        const targetEl = document.querySelector('#tour-feed');
+        
+        if (targetEl) {
+          setRunTour(true);        // Start the tour!
+          
+          // 🛡️ THE SPEEDRUNNER FIX: Mark as seen the exact millisecond it fires
+          markTourCompleted('hasSeenInsightsTour'); // This will handle both localStorage and backend sync
+          
+          clearInterval(checkDOM); // Stop checking!
+        }
+      }, 100);
+
+      // Cleanup function prevents memory leaks if user navigates away
+      return () => clearInterval(checkDOM); 
     }
-  };
+  }, [loading]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -108,7 +124,7 @@ const Insights = () => {
           message: userText,
           userName: firstName,
           currentFocus: metrics.avgFocus
-      });
+      }, { withCredentials: true });
 
       const aiResponse = { 
         sender: 'ai', 
@@ -141,39 +157,18 @@ const Insights = () => {
   return (
     <div className={styles.insightsContainer}>
       
-      {/* 🪄 JOYRIDE INJECTION */}
-      <Joyride
-        steps={tourSteps}
-        run={runTour}
-        continuous={true}
-        showSkipButton={true}
-        callback={handleTourCallback}
-        styles={{
-          options: {
-            arrowColor: '#1e293b',
-            backgroundColor: '#1e293b',
-            overlayColor: 'rgba(15, 23, 42, 0.85)',
-            primaryColor: '#6366f1',
-            textColor: '#f8fafc',
-            zIndex: 1000,
-          },
-          buttonNext: {
-            backgroundColor: '#6366f1',
-            borderRadius: '8px',
-            fontSize: '0.9rem',
-            padding: '8px 16px'
-          },
-          buttonBack: {
-            color: '#cbd5e1',
-            marginRight: '8px'
-          },
-          buttonSkip: {
-            color: '#64748b'
-          }
-        }}
+      {/* 🪄 OUR NEW CLEAN REUSABLE COMPONENT */}
+      <TourGuide 
+        steps={tourSteps} 
+        run={runTour} 
+        onComplete={() => {
+          localStorage.setItem('hasSeenInsightsTour', 'true');
+          setRunTour(false);
+        }} 
       />
 
-      <div id="tour-feed" className={styles.feedColumn}> {/* 👈 TARGET 1 */}
+      {/* 🛡️ FIX: ID Moved to the Column Container to fix Tooltip clipping */}
+      <div id="tour-feed" className={styles.feedColumn}> 
         <header className={`${styles.header} ${styles.animateFadeInUp}`}>
           <h1>AI Growth Engine</h1>
           <p>Real-time analysis of your learning patterns.</p>
@@ -261,7 +256,8 @@ const Insights = () => {
         </div>
       </div>
 
-      <div id="tour-mentor" className={`${styles.chatColumn} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.4s' }}> {/* 👈 TARGET 2 */}
+      {/* 🛡️ FIX: ID Moved to the Column Container to fix Tooltip clipping */}
+      <div id="tour-mentor" className={`${styles.chatColumn} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.4s' }}> 
         <div className={styles.chatHeader}>
           <h3>InsightED AI Mentor</h3>
           <span className={styles.onlineDot}></span>

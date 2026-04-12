@@ -28,8 +28,15 @@ const Sidebar = () => {
     } catch (error) {
       console.error("Backend logout failed, but clearing local session anyway.", error);
     } finally {
-      // 2. 🛡️ Nuke the browser memory (This forces the tours to reset for the next user!)
-      localStorage.clear();
+      // 2. 🛡️ THE SMART CLEAR: Wipes user data but protects Tour Guides and Preferences!
+      Object.keys(localStorage).forEach(key => {
+          if (!key.startsWith('hasSeen') && key !== 'appPreferences' && key !== 'darkMode') {
+              localStorage.removeItem(key);
+          }
+      });
+      
+      // Clear session storage just to be safe
+      sessionStorage.clear();
       
       // 3. Send them back to the login page
       navigate('/login');

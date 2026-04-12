@@ -1,12 +1,18 @@
-import React from 'react';
-import { Joyride, STATUS } from 'react-joyride';
+import { Joyride } from 'react-joyride'; // 🛡️ Removed STATUS import to prevent Vite crashes
 
 const TourGuide = ({ steps, run, onComplete }) => {
+  // If your automated testing bot is running, it skips the tour completely.
+  if (import.meta.env.VITE_DISABLE_TOURS === 'true') {
+    return null; 
+  }
+
   const handleCallback = (data) => {
-    const { status } = data;
-    const finishedStatuses = [STATUS.FINISHED, STATUS.SKIPPED];
-    if (finishedStatuses.includes(status)) {
-      onComplete(); // Tells the parent page to save to localStorage
+    const { status, action } = data;
+
+    // 🛡️ THE FIX: Use raw strings instead of the STATUS object.
+    // ALSO: Catch action === 'close' so clicking the dark overlay properly saves the completion!
+    if (status === 'finished' || status === 'skipped' || action === 'close') {
+      onComplete(); 
     }
   };
 
@@ -16,45 +22,41 @@ const TourGuide = ({ steps, run, onComplete }) => {
       run={run}
       continuous={true}
       showSkipButton={true}
-      disableScrollParentFix={true} /* Fixes positioning glitches */
+      showProgress={true}
+      disableOverlayClose={false} 
+      disableScrollParentFix={true}
       callback={handleCallback}
       styles={{
-        options: {
+        options: { 
           arrowColor: '#1e293b', 
-          backgroundColor: '#1e293b',
-          overlayColor: 'rgba(15, 23, 42, 0.85)',
-          primaryColor: '#6366f1',
-          textColor: '#f8fafc',
-          zIndex: 1000,
+          backgroundColor: '#1e293b', 
+          overlayColor: 'rgba(15, 23, 42, 0.75)', 
+          primaryColor: '#6366f1', 
+          textColor: '#f8fafc', 
+          zIndex: 10000 
         },
-        tooltip: {
-          backgroundColor: '#1e293b',
-          borderRadius: '12px',
-          border: '1px solid #334155',
-          color: '#f8fafc',           
-          padding: '20px'
-        },
-        tooltipContainer: {
-          textAlign: 'left'
-        },
-        buttonNext: {
-          backgroundColor: '#6366f1',
-          borderRadius: '8px',
-          color: '#ffffff',
-          fontWeight: '600',
+        buttonNext: { 
+          backgroundColor: '#6366f1', 
+          borderRadius: '8px', 
+          fontSize: '0.9rem', 
           padding: '8px 16px',
+          color: '#ffffff',
           border: 'none',
-          outline: 'none'
+          outline: 'none',
+          cursor: 'pointer'
         },
-        buttonBack: {
-          color: '#cbd5e1',
-          marginRight: '10px'
+        buttonBack: { 
+          color: '#cbd5e1', 
+          marginRight: '8px',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer'
         },
-        buttonSkip: {
-          color: '#64748b'
-        },
-        beacon: {
-          display: 'none' /* Hides the glitchy black circle */
+        buttonSkip: { 
+          color: '#64748b',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer'
         }
       }}
     />

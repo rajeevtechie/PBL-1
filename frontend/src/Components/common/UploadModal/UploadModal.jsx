@@ -7,7 +7,6 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   
-  // Added 'conflict' to the available steps
   const [step, setStep] = useState('upload'); // upload, processing, done, error, conflict
   
   const [errorMessage, setErrorMessage] = useState("");
@@ -47,20 +46,15 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = localStorage.getItem('token');
-
-    if (!token) {
-        setErrorMessage("You must be logged in to upload.");
-        setStep('error');
-        setIsUploading(false);
-        return;
-    }
+    // 🛡️ THE FIX: Removed the outdated localStorage token check. 
+    // The backend will now act as the bouncer using the HttpOnly cookie.
 
     try {
       const response = await axios.post('http://localhost:5000/api/syllabus/upload', formData, {
+        withCredentials: true, // 🛡️ Tell Axios to send the secure cookie
         headers: { 
-            'Content-Type': 'multipart/form-data',
-            'Authorization': `Bearer ${token}` 
+            'Content-Type': 'multipart/form-data'
+            // 🛡️ Removed the old Bearer token header
         },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -87,7 +81,7 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
         setConflictData(error.response.data);
         setStep('conflict');
       } 
-      // Handle standard errors
+      // Handle standard errors (This will catch the 401 if the cookie is invalid!)
       else if (error.response?.status === 401) {
           setErrorMessage("Session expired. Please login again.");
           setStep('error');
@@ -102,25 +96,23 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
 
   // --- NEW: Handle the Overwrite Confirmation ---
   const handleConfirmOverwrite = async () => {
-    setStep('processing'); // Go back to loading screen while saving
+    setStep('processing'); 
     setErrorMessage('');
     
     try {
-      const token = localStorage.getItem('token');
-      
-      // Send the AI parsed data back to overwrite the old record
+      // 🛡️ THE FIX: Send the secure cookie instead of the manual token
       const response = await axios.post('http://localhost:5000/api/syllabus/confirm-upload', {
         parsedData: conflictData.parsedData,
         existingId: conflictData.existingId
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        withCredentials: true // 🛡️ Tell Axios to send the secure cookie
       });
 
       setResultData(response.data.data);
       setSyllabusId(response.data.syllabusId);
       setStep('done');
 
-    } catch (err) {
+    } catch {
       setErrorMessage('Failed to overwrite the syllabus. Please try again.');
       setStep('error');
     }
@@ -233,7 +225,6 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
             </p>
             <button 
                 className={styles.primaryBtn} 
-                // Passes the new syllabusId to the Dashboard so it knows what to load
                 onClick={() => onComplete(syllabusId)}
                 style={{ width: '100%', padding: '14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
             >

@@ -12,11 +12,10 @@ const SubjectLibrary = () => {
   useEffect(() => {
     const fetchSubjects = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
+        // 🛡️ THE FIX: Removed the outdated localStorage token check.
+        // We now rely entirely on the secure HttpOnly cookie!
         const response = await axios.get('http://localhost:5000/api/syllabus/list', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          withCredentials: true 
         });
         
         setSubjects(response.data);

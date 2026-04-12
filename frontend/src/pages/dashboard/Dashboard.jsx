@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Play, TrendingUp, Clock, ArrowRight, BookOpen, Briefcase, Upload, Loader2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios'; 
-import { Joyride, STATUS } from 'react-joyride';// 👈 IMPORT JOYRIDE
+import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import UploadModal from '../../Components/common/UploadModal/UploadModal'; 
+// 🛡️ Ensure this component actually exists in this exact path!
 import SubjectLibrary from '../../Components/common/SubjectLibrary/SubjectLibrary';
 import ActivityGraph from '../../Components/common/Heatmap/ActivityGraph';
 import styles from './Dashboard.module.css';
+import { markTourCompleted } from '../../utils/tourSync'; // Adjust path if needed!
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -38,7 +40,7 @@ const Dashboard = () => {
           <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>Let's build your personalized AI learning path. Click here to upload your first university syllabus to get started.</p>
         </div>
       ),
-      disableBeacon: true, // Show instantly
+      disableBeacon: true, 
     },
     {
       target: '#tour-academic-track',
@@ -60,11 +62,12 @@ const Dashboard = () => {
     }
   ];
 
+  // 1. Fetch Data
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         try {
-            const resMetrics = await axios.get('http://localhost:5000/api/insights/dashboard');
+            const resMetrics = await axios.get('http://localhost:5000/api/insights/dashboard', { withCredentials: true });
             if (resMetrics.data.success) setMetrics(prev => ({...prev, ...resMetrics.data.data}));
         } catch { console.log("No analytics data yet."); }
 
@@ -72,18 +75,18 @@ const Dashboard = () => {
         const endpoint = activeId ? `http://localhost:5000/api/syllabus/${activeId}` : 'http://localhost:5000/api/syllabus/latest';
         
         try {
-            const resRoadmap = await axios.get(endpoint);
+            const resRoadmap = await axios.get(endpoint, { withCredentials: true });
             setRoadmap(resRoadmap.data);
         } catch { console.log("No roadmap data yet."); }
 
         try {
             const syllabusIdQuery = activeId || 'latest';
-            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`);
+            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`, { withCredentials: true });
             setCareerData(resCareer.data);
         } catch { console.log("No career data yet."); }
 
         try {
-            const resAggregate = await axios.get('http://localhost:5000/api/syllabus/progress/aggregate');
+            const resAggregate = await axios.get('http://localhost:5000/api/syllabus/progress/aggregate', { withCredentials: true });
             if(resAggregate.data) {
                 setAggregateProgress({ 
                     academic: resAggregate.data.academicProgress, 
@@ -97,27 +100,31 @@ const Dashboard = () => {
         console.error("Dashboard fetch error:", error);
       } finally {
         setLoading(false);
-        
-        // 🪄 Check if the user is new and hasn't seen the tour yet
-        const hasSeenTour = localStorage.getItem('hasSeenTour');
-        if (!hasSeenTour) {
-           setTimeout(() => setRunTour(true), 500); // Small delay so UI loads first
-        }
       }
     };
 
     fetchDashboardData();
   }, []);
 
-  const handleTourCallback = (data) => {
-    const { status } = data;
-    const finishedStatuses = [STATUS.FINISHED, STATUS.SKIPPED];
-    if (finishedStatuses.includes(status)) {
-      // Mark as seen so it never runs again for this user!
-      localStorage.setItem('hasSeenTour', 'true');
-      setRunTour(false);
+  // 2. 🛡️ DOM POLLING (The Speedrunner Fix)
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('hasSeenTour');
+
+    if (!hasSeenTour && !loading) {
+      const checkDOM = setInterval(() => {
+        const targetEl = document.querySelector('#tour-upload-btn');
+        
+        if (targetEl) {
+          setRunTour(true);        
+          //localStorage.setItem('hasSeenTour', 'true');
+          markTourCompleted('hasSeenTour'); // This will handle both localStorage and backend sync
+          clearInterval(checkDOM); 
+        }
+      }, 100);
+
+      return () => clearInterval(checkDOM); 
     }
-  };
+  }, [loading]);
 
   const handleRoadmapReady = (newSyllabusId) => {
     if (newSyllabusId && typeof newSyllabusId === 'string') {
@@ -190,49 +197,16 @@ const Dashboard = () => {
   return (
     <div className={styles.dashboardGrid}>
       
-      {/* 🪄 THE JOYRIDE COMPONENT (Invisible until triggered) */}
-      <Joyride
-        steps={tourSteps}
-        run={runTour}
-        continuous={true}
-        showSkipButton={true}
-        callback={handleTourCallback}
-        styles={{
-          options: {
-            arrowColor: '#1e293b', 
-            overlayColor: 'rgba(15, 23, 42, 0.85)',
-            primaryColor: '#6366f1',
-            zIndex: 1000,
-          },
-          tooltip: {
-            backgroundColor: '#1e293b', /* 🛡️ Explicitly force dark background */
-            borderRadius: '12px',
-            border: '1px solid #334155',
-            color: '#f8fafc',           /* 🛡️ Explicitly force white text */
-            padding: '20px'
-          },
-          tooltipContainer: {
-            textAlign: 'left'
-          },
-          buttonNext: {
-            backgroundColor: '#6366f1',
-            borderRadius: '8px',
-            color: '#ffffff',
-            fontWeight: '600',
-            padding: '8px 16px',
-            border: 'none',
-            outline: 'none'
-          },
-          buttonBack: {
-            color: '#cbd5e1',
-            marginRight: '10px'
-          },
-          buttonSkip: {
-            color: '#64748b'
-          }
-        }}
+      <TourGuide 
+        steps={tourSteps} 
+        run={runTour} 
+        onComplete={() => {
+          localStorage.setItem('hasSeenTour', 'true');
+          setRunTour(false);
+        }} 
       />
 
+      {/* --- HERO SECTION --- */}
       <section className={`${styles.heroSection} ${styles.animateFadeInUp || ''}`}>
         <div className={styles.heroHeader}>
           <span className={styles.heroBadge}>Dynamic Next Task</span>
@@ -244,10 +218,10 @@ const Dashboard = () => {
           </span>
           
           <button 
-            id="tour-upload-btn" // 👈 TARGET 1
+            id="tour-upload-btn" 
             onClick={() => setIsModalOpen(true)}
             className={styles.btnPulseHover || ''}
-            style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.8rem', fontWeight: '500'}}
+            style={{ marginLeft: 'auto', background: 'var(--primary)', border: 'none', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.8rem', fontWeight: '500'}}
           >
             <Upload size={14} /> Upload Syllabus
           </button>
@@ -277,13 +251,14 @@ const Dashboard = () => {
         </div>
       </section>
 
+      {/* 🛡️ THE FIX: Restored the Subject Library row! */}
       <section className={styles.animateFadeInUp || ''} style={{ gridColumn: '1 / -1', animationDelay: '0.1s' }}>
         <SubjectLibrary />
       </section>
 
       {/* --- ACADEMIC TRACK ACCORDION --- */}
       <section 
-        id="tour-academic-track" // 👈 TARGET 2
+        id="tour-academic-track" 
         className={`${styles.trackCard} ${styles.animateFadeInUp || ''}`} 
         style={{ animationDelay: '0.2s', cursor: 'pointer', transition: 'all 0.3s ease' }} 
         onClick={() => toggleTrack('academic')}
@@ -366,7 +341,7 @@ const Dashboard = () => {
         className={styles.animateFadeInUp || ''}
       >
         <section 
-          id="tour-ai-insight" // 👈 TARGET 3
+          id="tour-ai-insight" 
           className={styles.insightCard} 
           onClick={() => navigate('/insights')}
           style={{ 

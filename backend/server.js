@@ -14,6 +14,9 @@ const practiceLabRoutes = require('./routes/practiceLabRoutes');
 const libraryRoutes = require('./routes/libraryRoutes');
 const focusRoutes = require('./routes/focusRoutes');
 const insightRoutes = require('./routes/insightRoutes');
+// 🛡️ THE FIX: Import the User Routes!
+const userRoutes = require('./routes/userRoutes'); 
+
 const errorHandler = require('./middlewares/errorHandler');
 const startWeeklyEmailCron = require('./cron/weeklySummary');
 
@@ -73,6 +76,9 @@ app.use('/api/insights', insightRoutes);
 
 // 6. Focus Mode & Study Sessions
 app.use('/api/focus', focusRoutes);
+
+// 7. 🛡️ THE FIX: Mount the User Routes!
+app.use('/api/users', userRoutes);
 
 // --- Test Route ---
 app.get('/', (req, res) => {

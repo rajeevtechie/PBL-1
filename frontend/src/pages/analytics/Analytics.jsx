@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { TrendingUp, Target, Zap, Clock, Activity, Loader2 } from 'lucide-react';
-import { Joyride, STATUS } from 'react-joyride'; // 👈 IMPORT JOYRIDE
+import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import styles from './Analytics.module.css';
+import { markTourCompleted } from '../../utils/tourSync'; // Adjust path if needed!
 
 const getDynamicLast7Days = () => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -60,12 +61,13 @@ const Analytics = () => {
     }
   ];
 
+  // 1. Fetch Data
   useEffect(() => {
     const fetchAnalyticsData = async () => {
       try {
         const [resMetrics, resProgress] = await Promise.all([
-          axios.get('http://localhost:5000/api/insights/dashboard').catch(() => ({ data: { data: null } })),
-          axios.get('http://localhost:5000/api/syllabus/progress/aggregate').catch(() => ({ data: { academicProgress: 0, careerProgress: 0 } }))
+          axios.get('http://localhost:5000/api/insights/dashboard', { withCredentials: true }).catch(() => ({ data: { data: null } })),
+          axios.get('http://localhost:5000/api/syllabus/progress/aggregate', { withCredentials: true }).catch(() => ({ data: { academicProgress: 0, careerProgress: 0 } }))
         ]);
 
         if (resMetrics.data?.success && resMetrics.data?.data) setMetrics(resMetrics.data.data);
@@ -74,22 +76,34 @@ const Analytics = () => {
         console.error("Failed to fetch analytics data:", error);
       } finally {
         setLoading(false);
-        // 🪄 Check if they have seen the Analytics tour
-        if (!localStorage.getItem('hasSeenAnalyticsTour')) {
-          setTimeout(() => setRunTour(true), 600);
-        }
       }
     };
     fetchAnalyticsData();
   }, []);
 
-  const handleTourCallback = (data) => {
-    const { status } = data;
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
-      localStorage.setItem('hasSeenAnalyticsTour', 'true');
-      setRunTour(false);
+  // 2. 🛡️ THE ARCHITECTURE FIX: Bulletproof Tour Trigger (DOM Polling)
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('hasSeenAnalyticsTour');
+
+    // Only start polling if they haven't seen it AND the data is fully loaded
+    if (!hasSeenTour && !loading) {
+      const checkDOM = setInterval(() => {
+        const targetEl = document.querySelector('#tour-metrics');
+        
+        if (targetEl) {
+          setRunTour(true);        // Start the tour!
+          
+          // 🛡️ THE SPEEDRUNNER FIX: Mark as seen the exact millisecond it fires
+          //localStorage.setItem('hasSeenAnalyticsTour', 'true');
+          markTourCompleted('hasSeenAnalyticsTour'); // This will handle both localStorage and backend sync
+          clearInterval(checkDOM); // Stop checking!
+        }
+      }, 100);
+
+      // Cleanup function prevents memory leaks if user navigates away
+      return () => clearInterval(checkDOM); 
     }
-  };
+  }, [loading]);
 
   const velocityMultiplier = metrics.studyVelocity || 1.0;
   const activeDaysCount = metrics.consistencyData.filter(d => d > 0).length;
@@ -111,14 +125,14 @@ const Analytics = () => {
   return (
     <div className={styles.analyticsContainer}>
       
-      {/* 🪄 JOYRIDE INJECTION */}
-      <Joyride
-        steps={tourSteps} run={runTour} continuous={true} showSkipButton={true} callback={handleTourCallback}
-        styles={{
-          options: { arrowColor: '#1e293b', backgroundColor: '#1e293b', overlayColor: 'rgba(15, 23, 42, 0.85)', primaryColor: '#6366f1', textColor: '#f8fafc', zIndex: 1000 },
-          buttonNext: { backgroundColor: '#6366f1', borderRadius: '8px', fontSize: '0.9rem', padding: '8px 16px' },
-          buttonBack: { color: '#cbd5e1', marginRight: '8px' }, buttonSkip: { color: '#64748b' }
-        }}
+      {/* 🪄 OUR NEW CLEAN REUSABLE COMPONENT */}
+      <TourGuide 
+        steps={tourSteps} 
+        run={runTour} 
+        onComplete={() => {
+          localStorage.setItem('hasSeenAnalyticsTour', 'true');
+          setRunTour(false);
+        }} 
       />
 
       <header className={`${styles.header} ${styles.animateFadeInUp}`}>
