@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { UploadCloud, FileText, Timer, Sparkles, Folder, Save, Loader2, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileText, Timer, Sparkles, Folder, Save, Loader2, CheckCircle2, ListChecks } from 'lucide-react';
 import axios from 'axios';
 import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import styles from './practise_lab.module.css';
-import { markTourCompleted } from '../../utils/tourSync'; // Adjust path if needed!
+import { markTourCompleted } from '../../utils/tourSync'; 
 
 const TOPICS_KEY = 'practiceTopics';
 const SELECTED_KEY = 'practiceSelectedTopics';
@@ -24,6 +24,9 @@ const PracticeLab = () => {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [textInput, setTextInput] = useState(() => sessionStorage.getItem(DRAFT_TEXT_KEY) || '');
   const [draftFileMeta, setDraftFileMeta] = useState(() => JSON.parse(sessionStorage.getItem(DRAFT_FILE_META_KEY) || 'null'));
+
+  // 🛡️ DUAL-TRACK ARCHITECTURE STATE
+  const [contentSource, setContentSource] = useState('syllabus'); 
 
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
@@ -48,8 +51,8 @@ const PracticeLab = () => {
       target: '#tour-lab-upload',
       content: (
         <div>
-          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Upload Your Notes 📚</h3>
-          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>Upload any PDF or paste raw text. The AI will instantly read it and extract all the key topics.</p>
+          <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Context Engine 🧠</h3>
+          <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.95rem' }}>Sync directly with your AI Roadmap, or override it by uploading a custom document or past exam paper.</p>
         </div>
       ),
       disableBeacon: true,
@@ -101,7 +104,6 @@ const PracticeLab = () => {
     }
   }, [passedSubject]);
 
-  // 🛡️ THE ARCHITECTURE FIX: Bulletproof Tour Trigger
   useEffect(() => {
       const hasSeenTour = localStorage.getItem('hasSeenPracticeTour');
       
@@ -110,8 +112,7 @@ const PracticeLab = () => {
               const targetEl = document.querySelector('#tour-lab-upload');
               if (targetEl) {
                   setRunTour(true);
-                  // 🛡️ THE SPEEDRUNNER FIX
-                  markTourCompleted('hasSeenPracticeTour'); // This will handle both localStorage and backend sync
+                  markTourCompleted('hasSeenPracticeTour'); 
                   clearInterval(checkDOM);
               }
           }, 100);
@@ -149,37 +150,49 @@ const PracticeLab = () => {
     }
   };
 
+  // 🛡️ DUAL-TRACK LOGIC
   const handleExtractTopics = async () => {
     setExtractError(''); 
     setIsExtracting(true);
     
-    if (!uploadedFile && !textInput.trim()) {
-      if (draftFileMeta && !uploadedFile) {
-          setExtractError('Browser security requires you to re-select your PDF file before extracting.');
-      } else {
-          setExtractError('Please upload a syllabus PDF or paste text before continuing.');
-      }
-      setIsExtracting(false); 
-      return;
-    }
-
     try {
-      const formData = new FormData();
-      if (uploadedFile) formData.append('file', uploadedFile);
-      if (textInput.trim()) formData.append('text', textInput.trim());
+      let extractedTopics = [];
 
-      const response = await axios.post('http://localhost:5000/api/practice/extract-topics', formData, { withCredentials: true });
+      // 🔀 TRACK A: SYLLABUS SYNC
+      if (contentSource === 'syllabus') {
+          const response = await axios.post('http://localhost:5000/api/practice/extract-syllabus-topics', { 
+              subjectId: selectedSubject.id,
+              subjectName: selectedSubject.course_title
+          }, { withCredentials: true });
+          extractedTopics = Array.isArray(response.data.topics) ? response.data.topics : [];
+      } 
+      // 🔀 TRACK B: CUSTOM OVERRIDE
+      else {
+          if (!uploadedFile && !textInput.trim()) {
+            if (draftFileMeta && !uploadedFile) {
+                setExtractError('Browser security requires you to re-select your PDF file before extracting.');
+            } else {
+                setExtractError('Please upload a custom PDF or paste text.');
+            }
+            setIsExtracting(false); 
+            return;
+          }
+          const formData = new FormData();
+          if (uploadedFile) formData.append('file', uploadedFile);
+          if (textInput.trim()) formData.append('text', textInput.trim());
 
-      const extractedTopics = Array.isArray(response.data.topics) ? response.data.topics : [];
+          const response = await axios.post('http://localhost:5000/api/practice/extract-topics', formData, { withCredentials: true });
+          extractedTopics = Array.isArray(response.data.topics) ? response.data.topics : [];
+      }
+
       localStorage.setItem(TOPICS_KEY, JSON.stringify(extractedTopics));
       localStorage.setItem(SELECTED_KEY, JSON.stringify([]));
-      
       sessionStorage.removeItem(DRAFT_TEXT_KEY); 
       sessionStorage.removeItem(DRAFT_FILE_META_KEY);
       
       navigate('/practice-topics');
     } catch (error) {
-      setExtractError(error.response?.data?.message || 'Topic extraction failed.');
+      setExtractError(error.response?.data?.message || 'Topic extraction failed. Please try again.');
     } finally {
       setIsExtracting(false);
     }
@@ -247,7 +260,7 @@ const PracticeLab = () => {
           <div className={styles.splitGrid}>
             {subjects.length === 0 ? (
                <div className={styles.sectionCard}>
-                   <p style={{color: '#94a3b8'}}>No subjects found. Upload a syllabus from the Dashboard first.</p>
+                   <p style={{color: 'var(--text-dim)'}}>No subjects found. Upload a syllabus from the Dashboard first.</p>
                </div>
             ) : (
               subjects.map((sub, index) => (
@@ -268,9 +281,6 @@ const PracticeLab = () => {
     );
   }
 
-  const hasInput = Boolean(uploadedFile) || Boolean(textInput.trim());
-  const canExtract = hasInput && !isExtracting;
-
   return (
     <div className={styles.labContainer}>
         
@@ -287,77 +297,111 @@ const PracticeLab = () => {
         <div className={styles.animateFadeInUp}>
           <span className={styles.badge}>Subject: {selectedSubject.course_title}</span>
           <h2>Build your practice set in minutes</h2>
-          <p className={styles.subText}>Upload syllabus or notes, extract topics, then generate the format you want.</p>
+          <p className={styles.subText}>Select your data source, extract topics, then generate the format you want.</p>
         </div>
       </header>
 
+      {/* 🛡️ STEP 1: THE DUAL-TRACK UI */}
       <section id="tour-lab-upload" className={`${styles.sectionCard} ${styles.animateFadeInUp}`} style={{animationDelay: '0.1s'}}>
         <div className={styles.sectionHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
               <div className={styles.stepBadge}>Step 1</div>
-              <h3>Upload Content</h3>
-              <p>Drag & drop a PDF or paste your text.</p>
+              <h3>Content Source</h3>
+              <p>Where should we pull the topics from?</p>
           </div>
-          {(textInput.trim() || draftFileMeta) && !uploadedFile && (
+          {(textInput.trim() || draftFileMeta) && !uploadedFile && contentSource === 'custom' && (
               <span style={{ fontSize: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   Draft Restored
               </span>
           )}
         </div>
+
+        {/* THE TOGGLE SWITCH */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', background: 'var(--bg-main)', padding: '5px', borderRadius: '12px', width: 'fit-content' }}>
+            <button 
+                onClick={() => setContentSource('syllabus')}
+                style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: contentSource === 'syllabus' ? '#38bdf8' : 'transparent', color: contentSource === 'syllabus' ? '#fff' : 'var(--text-dim)', transition: 'all 0.2s' }}
+            >
+                📚 Sync with Syllabus
+            </button>
+            <button 
+                onClick={() => setContentSource('custom')}
+                style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: contentSource === 'custom' ? '#8b5cf6' : 'transparent', color: contentSource === 'custom' ? '#fff' : 'var(--text-dim)', transition: 'all 0.2s' }}
+            >
+                📄 Upload Custom Notes
+            </button>
+        </div>
         
-        <div className={styles.uploadGrid}>
-          <div className={styles.uploadPanel} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
-            <div className={styles.uploadIcon}><UploadCloud size={28} /></div>
-            <h4>Upload PDF</h4>
-            <p>Drop your study Material here or browse.</p>
-            <label className={styles.fileButton}>
-              <input type="file" accept=".pdf" onChange={(event) => handleFileUpload(event.target.files?.[0])} hidden />
-              Choose File
-            </label>
-            <div className={styles.fileMeta} style={{ color: uploadedFile ? '#10b981' : (draftFileMeta ? '#f59e0b' : '#94a3b8') }}>
-                {uploadedFile 
-                  ? <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'}}><CheckCircle2 size={14}/> {uploadedFile.name} ready!</span> 
-                  : (draftFileMeta ? `Please re-select: ${draftFileMeta.name}` : 'No file selected')
-                }
-            </div>
-            
-            {uploadedFile && (
-                <button 
-                  className={`${styles.secondaryAction} ${styles.btnPulseHover}`} 
-                  onClick={openFileModal} 
-                  disabled={isSavingFile} 
-                  style={{ marginTop: '12px' }}
-                >
-                    <Save size={16}/> {isSavingFile ? 'Saving...' : 'Save to Library'}
+        {contentSource === 'syllabus' ? (
+            // 🔀 TRACK A UI: Syllabus Sync
+            <div style={{ background: 'var(--bg-main)', border: '1px dashed var(--border-color)', borderRadius: '12px', padding: '40px', textAlign: 'center' }}>
+                <Sparkles size={40} color="#38bdf8" style={{ margin: '0 auto 15px auto' }} />
+                <h4 style={{ color: 'var(--text-main)', fontSize: '1.2rem', margin: '0 0 10px 0' }}>AI Roadmap Integration</h4>
+                <p style={{ color: 'var(--text-dim)', marginBottom: '20px', maxWidth: '500px', margin: '0 auto 25px auto' }}>We will automatically pull the curriculum directly from your saved {selectedSubject.course_title} roadmap.</p>
+                <button className={`${styles.primaryAction} ${styles.btnPulseHover}`} onClick={handleExtractTopics} disabled={isExtracting} style={{ margin: '0 auto' }}>
+                    {isExtracting ? <Loader2 className={styles.spin || "spin"} size={18} /> : <ListChecks size={18} />} 
+                    {isExtracting ? 'Syncing Topics...' : 'Load Syllabus Topics'}
                 </button>
-            )}
-          </div>
-          
-          <div className={styles.textPanel}>
-            <div className={styles.panelHeader}>
-                <FileText size={20} /><span>Paste Text</span>
             </div>
-            <textarea 
-              className={styles.textArea} 
-              placeholder="Paste your topics or study notes here..." 
-              value={textInput} 
-              onChange={(event) => { setTextInput(event.target.value); setExtractError(''); }} 
-            />
-          </div>
-        </div>
-        
-        <div className={styles.extractActionRow}>
-          <button className={`${styles.primaryAction} ${styles.btnPulseHover}`} onClick={handleExtractTopics} disabled={!canExtract}>
-            {isExtracting ? <Loader2 className={styles.spin || "spin"} size={18} /> : <Sparkles size={18} />} 
-            {isExtracting ? 'Extracting Topics...' : 'Extract Topics'}
-          </button>
-        </div>
+        ) : (
+            // 🔀 TRACK B UI: Upload/Paste (Original)
+            <>
+                <div className={styles.uploadGrid}>
+                  <div className={styles.uploadPanel} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+                    <div className={styles.uploadIcon}><UploadCloud size={28} /></div>
+                    <h4>Upload PDF</h4>
+                    <p>Drop a custom worksheet, past paper, or slides.</p>
+                    <label className={styles.fileButton}>
+                      <input type="file" accept=".pdf" onChange={(event) => handleFileUpload(event.target.files?.[0])} hidden />
+                      Choose File
+                    </label>
+                    <div className={styles.fileMeta} style={{ color: uploadedFile ? '#10b981' : (draftFileMeta ? '#f59e0b' : 'var(--text-dim)') }}>
+                        {uploadedFile 
+                          ? <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'}}><CheckCircle2 size={14}/> {uploadedFile.name} ready!</span> 
+                          : (draftFileMeta ? `Please re-select: ${draftFileMeta.name}` : 'No file selected')
+                        }
+                    </div>
+                    
+                    {uploadedFile && (
+                        <button 
+                          className={`${styles.secondaryAction} ${styles.btnPulseHover}`} 
+                          onClick={openFileModal} 
+                          disabled={isSavingFile} 
+                          style={{ marginTop: '12px' }}
+                        >
+                            <Save size={16}/> {isSavingFile ? 'Saving...' : 'Save to Library'}
+                        </button>
+                    )}
+                  </div>
+                  
+                  <div className={styles.textPanel}>
+                    <div className={styles.panelHeader}>
+                        <FileText size={20} /><span>Paste Text</span>
+                    </div>
+                    <textarea 
+                      className={styles.textArea} 
+                      placeholder="Paste specific topics or study notes here..." 
+                      value={textInput} 
+                      onChange={(event) => { setTextInput(event.target.value); setExtractError(''); }} 
+                    />
+                  </div>
+                </div>
+                
+                <div className={styles.extractActionRow} style={{ marginTop: '20px' }}>
+                  <button className={`${styles.primaryAction} ${styles.btnPulseHover}`} onClick={handleExtractTopics} disabled={(!uploadedFile && !textInput.trim()) || isExtracting}>
+                    {isExtracting ? <Loader2 className={styles.spin || "spin"} size={18} /> : <Sparkles size={18} />} 
+                    {isExtracting ? 'Extracting Topics...' : 'Extract Custom Topics'}
+                  </button>
+                </div>
+            </>
+        )}
         
         {extractError && <div className={styles.extractError}>{extractError}</div>}
         {saveError && <div className={styles.extractError}>{saveError}</div>}
         {saveSuccess && <div className={styles.successMessage}>{saveSuccess}</div>}
       </section>
 
+      {/* --- REMAINDER OF UI REMAINS IDENTICAL --- */}
       {isFileModalOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalCard}>
@@ -367,7 +411,7 @@ const PracticeLab = () => {
               className={styles.modalInput} 
               value={fileTitle} 
               onChange={(event) => { setFileTitle(event.target.value); setFileTitleError(''); }} 
-              placeholder="e.g., Semester 4 Notes" 
+              placeholder="e.g., Mock Test Override" 
             />
             {fileTitleError && <div className={styles.modalError}>{fileTitleError}</div>}
             <div className={styles.modalActions}>

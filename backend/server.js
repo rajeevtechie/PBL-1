@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const cookieParser = require('cookie-parser'); // 👈 PHASE 2: Added Cookie Parser
+const cookieParser = require('cookie-parser'); 
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const db = require('./config/db'); 
@@ -10,11 +10,10 @@ const db = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const syllabusRoutes = require('./routes/syllabusRoutes'); 
 const practiceRoutes = require('./routes/practiceRoutes');
-const practiceLabRoutes = require('./routes/practiceLabRoutes');
+// 🗑️ DELETED: practiceLabRoutes import
 const libraryRoutes = require('./routes/libraryRoutes');
 const focusRoutes = require('./routes/focusRoutes');
 const insightRoutes = require('./routes/insightRoutes');
-// 🛡️ THE FIX: Import the User Routes!
 const userRoutes = require('./routes/userRoutes'); 
 
 const errorHandler = require('./middlewares/errorHandler');
@@ -25,34 +24,28 @@ const PORT = process.env.PORT || 5000;
 
 // --- Global Middleware ---
 
-// 🛡️ CRITICAL Phase 2 CORS UPDATE: Allow credentials (cookies) to pass through
 app.use(cors({
-    origin: 'http://localhost:5173', // Must match your frontend Vite port exactly
-    credentials: true                // 👈 THIS ALLOWS AXIOS TO SEND COOKIES
+    origin: 'http://localhost:5173', 
+    credentials: true                
 }));
 
-// Parses incoming JSON payloads and URL-encoded data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🛡️ PHASE 2: Tell Express how to read HttpOnly cookies
-app.use(cookieParser()); // 👈 MUST be after express.json()
+app.use(cookieParser()); 
 
-// Serve static files from the uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- Security Middleware ---
 
-// 🛡️ SECURITY PHASE 1: Block brute-force login attacks
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 failed/successful login attempts per 15 mins
+  windowMs: 15 * 60 * 1000, 
+  max: 5, 
   message: { message: "Too many login attempts from this IP, please try again after 15 minutes." },
   standardHeaders: true, 
   legacyHeaders: false, 
 });
 
-// Apply this rate limiter ONLY to the auth routes
 app.use('/api/auth', authLimiter);
 
 
@@ -64,9 +57,9 @@ app.use('/api/auth', authRoutes);
 // 2. AI Syllabus Analysis & Roadmap Generation
 app.use('/api/syllabus', syllabusRoutes); 
 
-// 3. Practice Lab 
+// 3. Practice Lab (Unified Engine)
 app.use('/api/practice', practiceRoutes); 
-app.use('/api/practice', practiceLabRoutes); 
+// 🗑️ DELETED: practiceLabRoutes mount
 
 // 4. Library (Secure PDF Blob & Split-Screen View)
 app.use('/api/library', libraryRoutes); 
@@ -77,7 +70,7 @@ app.use('/api/insights', insightRoutes);
 // 6. Focus Mode & Study Sessions
 app.use('/api/focus', focusRoutes);
 
-// 7. 🛡️ THE FIX: Mount the User Routes!
+// 7. User Profiles & Settings
 app.use('/api/users', userRoutes);
 
 // --- Test Route ---
@@ -86,7 +79,6 @@ app.get('/', (req, res) => {
 });
 
 // --- Error Handling (Must be last) ---
-// Prevents server crashes by catching unhandled errors
 app.use(errorHandler);
 
 // --- Start Server ---
