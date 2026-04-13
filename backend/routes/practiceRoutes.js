@@ -1,31 +1,25 @@
-// backend/routes/practiceRoutes.js
 const express = require("express");
 const router = express.Router();
 const practiceController = require("../controllers/practiceController");
 const authMiddleware = require("../middleware/authMiddleware");
 
+// Note: Ensure you import your multer upload middleware if your app uses one!
+const upload = require("../middleware/uploadMiddleware"); // Adjust path if needed
+
 // 1. AI Practice Generation Route
-// Used by practise_quiz.jsx to generate questions via Gemini
-router.post(
-  "/generate", 
-  authMiddleware, 
-  practiceController.generatePractice
-);
+router.post("/generate", authMiddleware, practiceController.generatePractice);
 
 // 2. Focus Mode Route
-// Used by StudySession.jsx to save completed Pomodoro data
-router.post(
-  "/log-session", 
-  authMiddleware, 
-  practiceController.logStudySession
-);
+router.post("/log-session", authMiddleware, practiceController.logStudySession);
 
 // 3. Dashboard Analytics Route
-// Used by Dashboard.jsx to fetch total time, avg focus, and recent history
-router.get(
-  "/stats", 
-  authMiddleware, 
-  practiceController.getStudyStats
-);
+router.get("/stats", authMiddleware, practiceController.getStudyStats);
+
+// 🛡️ 4. TRACK A: Sync with Database Syllabus
+router.post('/extract-syllabus-topics', authMiddleware, practiceController.extractSyllabusTopics);
+
+// 🛡️ 5. TRACK B: Extract Custom Topics from Uploaded PDF/Text
+// Make sure you have upload.single('file') if your controller expects req.file
+router.post('/extract-topics', authMiddleware, upload.single('file'), practiceController.extractTopics);
 
 module.exports = router;

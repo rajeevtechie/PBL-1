@@ -3,7 +3,7 @@ import { Square, CheckCircle, Clock, Save, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import styles from './practise_lab.module.css';
-import { markTourCompleted } from '../../utils/tourSync'; // Adjust path if needed!
+import { markTourCompleted } from '../../utils/tourSync'; 
 
 const RESULTS_KEY = 'practiceQuizResults';
 const SELECTED_KEY = 'practiceSelectedTopics';
@@ -68,24 +68,20 @@ const PractiseQuiz = () => {
 
   const modeMap = { 'Quiz (MCQ)': 'quiz', 'Short Answer': 'short', 'Long Answer': 'long', 'Case Study': 'case', 'Mock Test': 'mock', 'Study Notes': 'notes' };
 
-  // 1. Just load the data here
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem(RESULTS_KEY) || '[]');
     const loadedItems = normalizeStoredResults(stored, settings.mode);
     setItems(loadedItems);
   }, [settings.mode]);
 
-  // 2. 🛡️ THE ARCHITECTURE FIX: Bulletproof Tour Trigger
   useEffect(() => {
     const hasSeenTour = localStorage.getItem('hasSeenPracticeQuizTour');
     
-    // Only run if there is content, it's not just study notes, and they haven't seen it
     if (!hasSeenTour && items.length > 0 && settings.mode !== 'Study Notes') {
         const checkDOM = setInterval(() => {
             const targetEl = document.querySelector('#tour-quiz-timer');
             if (targetEl) {
                 setRunTour(true);
-                // 🛡️ THE SPEEDRUNNER FIX
                 markTourCompleted('hasSeenPracticeQuizTour');
                 clearInterval(checkDOM);
             }
@@ -227,7 +223,15 @@ const PractiseQuiz = () => {
     setIsSaving(true); setSaveError(''); setSaveSuccess('');
 
     try {
-      const payload = { title: titleValue.trim(), type: selectedMode, category: localStorage.getItem('practiceSubject') || 'General', content: { items, meta: { mode: settings.mode } } };
+      // 🛡️ THE FIX: We tag the source so the Library knows where to render it!
+      const contentSourceTag = localStorage.getItem('practiceDraftFileMeta') ? 'pdf' : 'syllabus';
+
+      const payload = { 
+          title: titleValue.trim(), 
+          type: selectedMode, 
+          category: localStorage.getItem('practiceSubject') || 'General', 
+          content: { items, meta: { mode: settings.mode }, source: contentSourceTag } // 👈 Source tag ensures standalone display
+      };
       
       await axios.post('http://localhost:5000/api/library/save-content', payload, { withCredentials: true });
       
@@ -246,7 +250,7 @@ const PractiseQuiz = () => {
     }
 
     return (
-      <div key={`${index}`} className={`${styles.resultItem} ${styles.animateSlideUp}`} style={{ animationDelay: `${index * 0.1}s`, borderColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)') : '#334155', backgroundColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)') : 'transparent' }}>
+      <div key={`${index}`} className={`${styles.resultItem} ${styles.animateSlideUp}`} style={{ animationDelay: `${index * 0.1}s`, borderColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)') : 'var(--border-color)', backgroundColor: isSubmitted && isMCQ ? (isCorrect ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)') : 'transparent' }}>
         <div className={styles.resultQuestion}>{settings.mode !== 'Study Notes' ? `Q${index + 1}. ` : ''} {item.question || item.scenario || item.content || 'AI Content'}</div>
         {isMCQ && (
           <div className={styles.interactiveOptions}>
@@ -285,19 +289,19 @@ const PractiseQuiz = () => {
         }} 
       />
 
-      <header id="tour-quiz-timer" className={`${styles.quizHeader} ${styles.animateFadeInUp}`} style={{ alignItems: 'center', background: '#1e293b', padding: '20px', borderRadius: '16px', border: isFocusActive ? '1px solid #10b981' : '1px solid #334155' }}>
+      <header id="tour-quiz-timer" className={`${styles.quizHeader} ${styles.animateFadeInUp}`} style={{ alignItems: 'center', background: 'var(--bg-panel)', padding: '20px', borderRadius: '16px', border: isFocusActive ? '1px solid #10b981' : '1px solid var(--border-color)' }}>
         <div>
           <span className={styles.badge} style={{ color: isFocusActive ? '#10b981' : (isSubmitted ? '#8b5cf6' : '#3b82f6') }}>{isFocusActive ? 'Focus Engine Active' : (isSubmitted ? 'Evaluation Complete' : 'Practice Lab')}</span>
           <h2 className={styles.quizTitle}>{modeLabel} {quizScore !== null ? `- Score: ${quizScore}%` : ''}</h2>
         </div>
         {items.length > 0 && targetMinutes > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(15, 23, 42, 0.4)', padding: '6px 12px', borderRadius: '8px', border: '1px solid #334155' }}>
-              <Clock size={16} color="#94a3b8" />
-              <input type="number" value={targetMinutes} onChange={handleTimeChange} onBlur={handleTimeBlur} disabled={isSubmitted || isFocusActive} style={{ width: '40px', background: 'transparent', border: 'none', color: '#fff', fontSize: '1rem', fontWeight: 'bold', textAlign: 'center', outline: 'none' }} />
-              <span style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '600' }}>min</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-main)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <Clock size={16} color="var(--text-dim)" />
+              <input type="number" value={targetMinutes} onChange={handleTimeChange} onBlur={handleTimeBlur} disabled={isSubmitted || isFocusActive} style={{ width: '40px', background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '1rem', fontWeight: 'bold', textAlign: 'center', outline: 'none' }} />
+              <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem', fontWeight: '600' }}>min</span>
             </div>
-            <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: isFocusActive ? '#10b981' : '#f8fafc', fontVariantNumeric: 'tabular-nums', minWidth: '100px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.2rem', fontWeight: 'bold', color: isFocusActive ? '#10b981' : 'var(--text-main)', fontVariantNumeric: 'tabular-nums', minWidth: '100px', textAlign: 'center' }}>
               {`${Math.floor(remainingSeconds / 60).toString().padStart(2, '0')}:${(remainingSeconds % 60).toString().padStart(2, '0')}`}
             </div>
             {isFocusActive && (<button onClick={() => handleSubmitQuiz()} className={styles.btnPulseHover} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}><Square size={16} fill="white"/> End Early</button>)}
