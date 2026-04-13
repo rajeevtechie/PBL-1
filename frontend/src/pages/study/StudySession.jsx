@@ -21,9 +21,8 @@ const StudySession = () => {
   const [loadingSubjects, setLoadingSubjects] = useState(!selectedSubject);
   const [notes, setNotes] = useState('');
   
-  // ✅ NEW: Rating Modal State
   const [showRating, setShowRating] = useState(false);
-  const [ratingValue, setRatingValue] = useState(5); // Default to 5 stars
+  const [ratingValue, setRatingValue] = useState(5); 
 
   useEffect(() => {
     const passedSubject = location.state?.defaultSubject || location.state?.subjectName;
@@ -43,7 +42,7 @@ const StudySession = () => {
             headers: { Authorization: `Bearer ${token}` }
           });
           setSubjects(res.data);
-        } catch (err) {
+        } catch  {
           console.error("Failed to load subjects");
         } finally {
           setLoadingSubjects(false);
@@ -57,20 +56,17 @@ const StudySession = () => {
     navigate('/assessment', { state: { subjectName: selectedSubject } });
   };
 
-  // ✅ NEW: Intercept the Stop button to show the rating modal
   const handleInitiateStop = () => {
     const studiedSeconds = (targetMinutes * 60) - remainingSeconds;
     
     if (studiedSeconds < 60) {
-        // If it's under a minute, don't bother asking for a rating, just stop it
         handleStopAndSave(0);
     } else {
-        if (!isPaused) pauseSession(); // Freeze the timer while they rate
+        if (!isPaused) pauseSession(); 
         setShowRating(true);
     }
   };
 
-  // ✅ NEW: Save the score (Stars * 20 = Percentage)
   const handleStopAndSave = async (score) => {
     setShowRating(false);
     await stopSession(score); 
@@ -83,11 +79,12 @@ const StudySession = () => {
     return `${m}:${s}`;
   };
 
+  // --- 1. BRIDGE PAGE (SUBJECT SELECTION) ---
   if (!selectedSubject) {
     return (
       <div className={styles.container}>
         <header className={`${styles.header} ${styles.animateFadeInUp}`}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer', color: '#94a3b8', marginBottom: '20px' }} onClick={() => navigate('/dashboard')}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer', color: 'var(--text-dim)', marginBottom: '20px' }} onClick={() => navigate('/dashboard')}>
             <ArrowLeft size={20} /> Back to Dashboard
           </div>
           <div>
@@ -97,11 +94,11 @@ const StudySession = () => {
           </div>
         </header>
         
-        {loadingSubjects ? <p style={{color: '#94a3b8', marginTop: '20px'}}>Loading your subjects...</p> : (
+        {loadingSubjects ? <p style={{color: 'var(--text-dim)', marginTop: '20px'}}>Loading your subjects...</p> : (
           <div className={styles.subjectGrid}>
             {subjects.length === 0 ? (
                <div className={`${styles.subjectCard} ${styles.animateFadeInUp}`}>
-                 <p style={{color: '#94a3b8'}}>No subjects found. Upload a syllabus from the Dashboard first.</p>
+                 <p style={{color: 'var(--text-dim)'}}>No subjects found. Upload a syllabus from the Dashboard first.</p>
                </div>
             ) : (
               [{ id: 'general', course_title: 'General Focus Session' }, ...subjects].map((sub, index) => (
@@ -122,12 +119,14 @@ const StudySession = () => {
     );
   }
 
+  // --- 2. TIMER PAGE ---
   return (
     <div className={styles.container}>
       <header className={`${styles.headerRow} ${styles.animateFadeInUp}`}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: '#94a3b8', marginBottom: '15px', fontWeight: '500' }} onClick={() => navigate('/dashboard')}>
-            <ArrowLeft size={18} /> Back to Dashboard
+          {/* 🛡️ UX FIX: Button now clears subject to go back to the bridge page */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: 'var(--text-dim)', marginBottom: '15px', fontWeight: '500' }} onClick={() => setSelectedSubject(null)}>
+            <ArrowLeft size={18} /> Back to Subjects
           </div>
           <span className={styles.badge}>FOCUS MODE</span>
           <h2 className={styles.title}>{selectedSubject}</h2>
@@ -137,7 +136,7 @@ const StudySession = () => {
       <div className={styles.splitLayout}>
         <div className={`${styles.timerPanel} ${styles.animateFadeInUp}`} style={{ animationDelay: '0.1s' }}>
           <div className={styles.timeSelector}>
-            <Clock size={16} color="#94a3b8"/>
+            <Clock size={16} color="var(--text-dim)"/>
             <input 
               type="number" 
               value={targetMinutes}
@@ -155,7 +154,8 @@ const StudySession = () => {
           </div>
 
           <div className={styles.timerCircle}>
-            <div className={styles.timeDisplay} style={{ color: isPaused ? '#f59e0b' : '#ffffff' }}>
+            {/* 🛡️ LIGHT MODE FIX: Timer text color */}
+            <div className={styles.timeDisplay} style={{ color: isPaused ? '#f59e0b' : 'var(--text-main)' }}>
                {formatTime(remainingSeconds)}
             </div>
             <div className={styles.timerStatus}>
@@ -179,7 +179,6 @@ const StudySession = () => {
                   {isPaused ? 'Resume' : 'Pause'}
                 </button>
 
-                {/* ✅ Trigger the modal instead of stopping instantly */}
                 <button className={`${styles.stopBtn} ${styles.btnPulseHover}`} onClick={handleInitiateStop}>
                   <Square size={20} fill="currentColor" /> Stop
                 </button>
@@ -215,12 +214,13 @@ const StudySession = () => {
         </div>
       </div>
 
-      {/* ✅ NEW: RATING MODAL OVERLAY */}
+      {/* --- 3. RATING MODAL OVERLAY --- */}
       {showRating && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-            <div style={{ backgroundColor: '#1e293b', border: '1px solid #3b82f6', borderRadius: '20px', padding: '40px', width: '90%', maxWidth: '420px', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
-                <h3 style={{ fontSize: '1.8rem', margin: '0 0 10px 0', color: '#f8fafc', fontWeight: '800' }}>Session Complete</h3>
-                <p style={{ color: '#94a3b8', fontSize: '1.05rem', marginBottom: '30px' }}>How focused were you during this session?</p>
+            {/* 🛡️ LIGHT MODE FIX: Modal Background, Border, and Text Colors */}
+            <div style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '20px', padding: '40px', width: '90%', maxWidth: '420px', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                <h3 style={{ fontSize: '1.8rem', margin: '0 0 10px 0', color: 'var(--text-main)', fontWeight: '800' }}>Session Complete</h3>
+                <p style={{ color: 'var(--text-dim)', fontSize: '1.05rem', marginBottom: '30px' }}>How focused were you during this session?</p>
                 
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '40px' }}>
                     {[1, 2, 3, 4, 5].map(star => (
@@ -238,7 +238,7 @@ const StudySession = () => {
                 </div>
 
                 <button 
-                    onClick={() => handleStopAndSave(ratingValue * 20)} // 5 stars = 100%, 4 stars = 80%, etc.
+                    onClick={() => handleStopAndSave(ratingValue * 20)}
                     style={{ background: '#10b981', color: 'white', border: 'none', padding: '14px 30px', borderRadius: '12px', fontSize: '1.15rem', fontWeight: 'bold', cursor: 'pointer', width: '100%', transition: 'background 0.2s', boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.4)' }}
                     onMouseOver={e => e.currentTarget.style.background = '#059669'}
                     onMouseOut={e => e.currentTarget.style.background = '#10b981'}

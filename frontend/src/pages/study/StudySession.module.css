@@ -2,7 +2,7 @@
   max-width: 1100px;
   margin: 0 auto;
   padding: 20px 0;
-  color: #f8fafc;
+  color: var(--text-main); /* 🛡️ FIXED */
   font-family: 'Inter', system-ui, sans-serif;
 }
 
@@ -27,25 +27,7 @@
 .title {
   margin: 10px 0 0 0;
   font-size: 2rem;
-  color: #ffffff;
-}
-
-.exitBtn {
-  background: transparent;
-  border: 1px solid #334155;
-  color: #cbd5e1;
-  padding: 8px 16px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.exitBtn:hover {
-  background: #334155;
-  color: white;
+  color: var(--text-main); /* 🛡️ FIXED */
 }
 
 /* --- SUBJECT GATE GRID --- */
@@ -57,8 +39,8 @@
 }
 
 .subjectCard {
-  background-color: #1e293b;
-  border: 1px solid #334155;
+  background-color: var(--bg-panel); /* 🛡️ FIXED */
+  border: 1px solid var(--border-color); /* 🛡️ FIXED */
   border-radius: 12px;
   padding: 25px;
   display: flex;
@@ -71,14 +53,14 @@
 .subjectCard:hover {
   border-color: #38bdf8;
   transform: translateY(-2px);
-  background-color: rgba(30, 41, 59, 0.8);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  background-color: var(--bg-main); /* 🛡️ FIXED */
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
 .subjectCard h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: #f8fafc;
+  color: var(--text-main); /* 🛡️ FIXED */
 }
 
 /* --- SPLIT LAYOUT --- */
@@ -90,8 +72,8 @@
 
 /* LEFT PANEL */
 .timerPanel {
-  background-color: #0f172a;
-  border: 1px solid #1e293b;
+  background-color: var(--bg-main); /* 🛡️ FIXED */
+  border: 1px solid var(--border-color); /* 🛡️ FIXED */
   border-radius: 24px;
   padding: 40px;
   display: flex;
@@ -112,7 +94,7 @@
 .timeInput {
   background: transparent;
   border: none;
-  color: #f8fafc;
+  color: var(--text-main); /* 🛡️ FIXED */
   font-size: 1.2rem;
   font-weight: bold;
   width: 40px;
@@ -124,25 +106,26 @@
   width: 300px;
   height: 300px;
   border-radius: 50%;
-  background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
+  background: var(--bg-panel); /* 🛡️ FIXED: Gradients are tricky in light mode, solid background looks cleaner */
+  border: 3px solid var(--border-color); /* 🛡️ FIXED */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 40px rgba(0,0,0,0.3);
+  box-shadow: 0 0 40px rgba(0,0,0,0.1);
   margin-bottom: 40px;
 }
 
 .timeDisplay {
   font-size: 5rem;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--text-main); /* 🛡️ FIXED */
   font-variant-numeric: tabular-nums;
   letter-spacing: -2px;
 }
 
 .timerStatus {
-  color: #94a3b8;
+  color: var(--text-dim); /* 🛡️ FIXED */
   font-size: 1rem;
   margin-top: 10px;
 }
@@ -185,7 +168,7 @@
 .panelTitle {
   font-size: 1.2rem;
   margin: 0 0 20px 0;
-  color: #f8fafc;
+  color: var(--text-main); /* 🛡️ FIXED */
 }
 
 .resourceList {
@@ -195,8 +178,8 @@
 }
 
 .resourceCard {
-  background-color: #1e293b;
-  border: 1px solid #334155;
+  background-color: var(--bg-panel); /* 🛡️ FIXED */
+  border: 1px solid var(--border-color); /* 🛡️ FIXED */
   border-radius: 12px;
   padding: 20px;
   display: flex;
@@ -207,18 +190,19 @@
 }
 
 .resourceCard:hover {
-  border-color: #475569;
+  border-color: #3b82f6;
 }
 
 .resourceCard h4 {
   margin: 0 0 8px 0;
   font-size: 1rem;
-  color: #f8fafc;
+  color: var(--text-main); /* 🛡️ FIXED */
 }
 
 .resourceTag {
-  background: rgba(255, 255, 255, 0.05);
-  color: #94a3b8;
+  background: var(--bg-main); /* 🛡️ FIXED */
+  border: 1px solid var(--border-color); /* 🛡️ FIXED */
+  color: var(--text-dim); /* 🛡️ FIXED */
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -233,11 +217,11 @@
   width: 100%;
   height: 100%;
   min-height: 200px;
-  background-color: #1e293b;
-  border: 1px solid #334155;
+  background-color: var(--bg-panel); /* 🛡️ FIXED */
+  border: 1px solid var(--border-color); /* 🛡️ FIXED */
   border-radius: 12px;
   padding: 20px;
-  color: #cbd5e1;
+  color: var(--text-main); /* 🛡️ FIXED */
   font-family: inherit;
   font-size: 0.95rem;
   line-height: 1.6;
@@ -253,7 +237,7 @@
   position: absolute;
   bottom: 20px;
   right: 20px;
-  color: #475569;
+  color: var(--text-dim); /* 🛡️ FIXED */
 }
 
 /* --- GLOBAL ANIMATIONS --- */
@@ -273,5 +257,5 @@
 
 .btnPulseHover:hover {
   transform: scale(1.03);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.10);
 }
