@@ -178,21 +178,21 @@ exports.getActivityHeatmap = async (req, res) => {
     try {
         const userId = req.user?.id || req.userId;
 
-        // Fetch ALL sessions for the user (No 1-year limit!) so the frontend can filter by year
+        // 🛡️ THE FIX: Use DATE_FORMAT to force MySQL to return a raw string (YYYY-MM-DD)
         const [sessions] = await db.execute(`
             SELECT 
-                DATE(start_time) as active_date, 
+                DATE_FORMAT(start_time, '%Y-%m-%d') as active_date, 
                 COUNT(*) as total_sessions, 
                 SUM(duration_minutes) as total_minutes
             FROM study_sessions 
             WHERE user_id = ? 
-            GROUP BY DATE(start_time)
+            GROUP BY active_date
             ORDER BY active_date ASC
         `, [userId]);
 
         // Format the data for the react-activity-calendar
         const heatmapData = sessions.map(row => {
-            const totalMins = row.total_minutes;
+            const totalMins = parseInt(row.total_minutes) || 0;
             
             // Determine how "bright" the green square should be (Scale 1-4)
             let intensityLevel = 1; // Light green (Under 30 mins)
@@ -200,11 +200,8 @@ exports.getActivityHeatmap = async (req, res) => {
             if (totalMins >= 60) intensityLevel = 3; // High (1-2 hours)
             if (totalMins >= 120) intensityLevel = 4; // Intense (2+ hours)
 
-            // MySQL returns dates with timezones, we just need YYYY-MM-DD
-            const dateStr = new Date(row.active_date).toISOString().split('T')[0];
-
             return {
-                date: dateStr,
+                date: row.active_date, // 👈 Clean string, no shifting!
                 count: totalMins, // Used for the hover tooltip 
                 level: intensityLevel
             };
