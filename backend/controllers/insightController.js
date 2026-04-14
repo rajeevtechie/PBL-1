@@ -1,10 +1,6 @@
 const db = require('../config/db');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-require("dotenv").config();
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-// Pointing to the stable 1.5-flash model
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// 🛡️ THE FIX: Import our centralized model instead of creating a new one!
+const { model } = require('../config/geminiConfig');
 
 // --- 1. DASHBOARD & ANALYTICS DATA ---
 exports.getDashboardAnalytics = async (req, res, next) => {
@@ -211,5 +207,94 @@ exports.getActivityHeatmap = async (req, res) => {
     } catch (error) {
         console.error("Heatmap Error:", error);
         res.status(500).json({ success: false, message: "Failed to load heatmap data" });
+    }
+};
+
+// --- 4. GENERATE WEEKLY AI SUMMARY ---
+exports.generateWeeklySummary = async (req, res) => {
+    try {
+        const userId = req.user?.id || req.userId;
+        
+        // 1. Calculate the date range (Last 7 days)
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - 7);
+
+        // 2. Fetch the student's raw data for the week
+        const [sessions] = await db.execute(`
+            SELECT subject_name, duration_minutes, focus_score 
+            FROM study_sessions 
+            WHERE user_id = ? AND start_time BETWEEN ? AND ?
+        `, [userId, startDate.toISOString(), endDate.toISOString()]);
+
+        if (sessions.length === 0) {
+            return res.status(200).json({ 
+                success: true, 
+                message: "Not enough data yet.",
+                insight: "You haven't logged any study sessions this week! Start a focus timer to get your AI summary." 
+            });
+        }
+
+        // 3. Crunch the numbers
+        let totalMinutes = 0;
+        let totalFocus = 0;
+        const subjectTally = {};
+
+        sessions.forEach(s => {
+            totalMinutes += s.duration_minutes;
+            totalFocus += s.focus_score;
+            subjectTally[s.subject_name] = (subjectTally[s.subject_name] || 0) + s.duration_minutes;
+        });
+
+        const avgFocus = Math.round(totalFocus / sessions.length);
+        const topSubject = Object.keys(subjectTally).reduce((a, b) => subjectTally[a] > subjectTally[b] ? a : b);
+        const hours = (totalMinutes / 60).toFixed(1);
+
+        const statsJson = { totalMinutes, avgFocus, topSubject, sessionCount: sessions.length };
+
+        // 4. Ask Gemini to act as the Mentor
+        const prompt = `You are the InsightED AI Mentor, an encouraging academic coach.
+        Analyze this student's weekly study data:
+        - Total Study Time: ${hours} hours
+        - Average Focus Score: ${avgFocus}% (100% is perfect deep work, below 60% means they were highly distracted)
+        - Most Studied Subject: ${topSubject}
+        
+        Write a short, highly personalized, 3-sentence summary of their week. 
+        Acknowledge their hard work, gently point out if their focus was low, and offer ONE specific piece of advice for next week. Keep it conversational and inspiring.`;
+
+        const result = await model.generateContent(prompt);
+        let insightText = await result.response.text();
+        
+        // Clean up markdown just in case
+        insightText = insightText.replace(/\*\*/g, '').trim();
+
+        // 5. Save it to the database
+        await db.execute(`
+            INSERT INTO weekly_insights (user_id, week_start_date, week_end_date, insight_text, stats_json)
+            VALUES (?, ?, ?, ?, ?)
+        `, [userId, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0], insightText, JSON.stringify(statsJson)]);
+
+        res.status(200).json({ success: true, insight: insightText, stats: statsJson });
+
+    } catch (error) {
+        console.error("Weekly Summary Error:", error);
+        res.status(500).json({ success: false, message: "Failed to generate AI summary." });
+    }
+};
+
+// --- 5. FETCH SAVED WEEKLY INSIGHTS ---
+exports.getWeeklyInsights = async (req, res) => {
+    try {
+        const userId = req.user?.id || req.userId;
+        const [insights] = await db.execute(`
+            SELECT insight_text, stats_json, week_end_date 
+            FROM weekly_insights 
+            WHERE user_id = ? 
+            ORDER BY week_end_date DESC LIMIT 5
+        `, [userId]);
+
+        res.status(200).json({ success: true, data: insights });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to fetch insights." });
     }
 };

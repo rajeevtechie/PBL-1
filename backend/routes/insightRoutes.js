@@ -12,5 +12,8 @@ router.get('/dashboard', authMiddleware, insightController.getDashboardAnalytics
 router.post('/chat', authMiddleware, insightController.chatWithMentor);
 // Add this under your existing routes
 router.get('/heatmap', authMiddleware, insightController.getActivityHeatmap);
+// ... existing routes ...
+router.post('/weekly-summary', authMiddleware, insightController.generateWeeklySummary);
+router.get('/weekly-summary', authMiddleware, insightController.getWeeklyInsights);
 
 module.exports = router;
