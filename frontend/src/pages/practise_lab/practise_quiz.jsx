@@ -193,6 +193,7 @@ const PractiseQuiz = () => {
     }
   };
 
+  // 🛡️ THE FIX: Polling the AI Queue
   const handleGenerateMore = async () => {
     setGenerateError('');
     const selectedTopics = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
@@ -207,14 +208,47 @@ const PractiseQuiz = () => {
 
     setIsGenerating(true);
     try {
+      // 1. Hand the job to the backend and get our ticket (jobId)
       const response = await axios.post('http://localhost:5000/api/practice/generate', payload, { withCredentials: true });
-      
-      const nextItems = Array.isArray(response.data.data) ? response.data.data : [];
-      localStorage.setItem(RESULTS_KEY, JSON.stringify({ mode: settings.mode, items: nextItems }));
-      setItems(nextItems); setUserAnswers({}); setIsSubmitted(false); setQuizScore(null);
-      setStudiedSeconds(0); setSessionStartTime(null); setIsFocusActive(false);
-    } catch (error) { setGenerateError(error.response?.data?.message || 'Failed to generate questions.'); } 
-    finally { setIsGenerating(false); }
+      const jobId = response.data.jobId;
+
+      // 2. Poll the status route every 2 seconds
+      const pollInterval = setInterval(async () => {
+          try {
+              const statusRes = await axios.get(`http://localhost:5000/api/practice/status/${jobId}`, { withCredentials: true });
+              
+              if (statusRes.data.status === 'completed') {
+                  clearInterval(pollInterval);
+                  
+                  const nextItems = Array.isArray(statusRes.data.data) ? statusRes.data.data : [];
+                  localStorage.setItem(RESULTS_KEY, JSON.stringify({ mode: settings.mode, items: nextItems }));
+                  
+                  setItems(nextItems); 
+                  setUserAnswers({}); 
+                  setIsSubmitted(false); 
+                  setQuizScore(null);
+                  setStudiedSeconds(0); 
+                  setSessionStartTime(null); 
+                  setIsFocusActive(false);
+                  setIsGenerating(false);
+
+              } else if (statusRes.data.status === 'failed') {
+                  clearInterval(pollInterval);
+                  setGenerateError('AI failed to generate content. Please try again.');
+                  setIsGenerating(false);
+              }
+              // If status is still 'waiting' or 'active', it just loops and asks again!
+          } catch {
+              clearInterval(pollInterval);
+              setGenerateError('Error checking queue status.');
+              setIsGenerating(false);
+          }
+      }, 2000);
+
+    } catch (error) { 
+        setGenerateError(error.response?.data?.message || 'Failed to connect to queue.'); 
+        setIsGenerating(false); 
+    } 
   };
 
   const handleSaveToLibrary = async (titleValue) => {
@@ -223,14 +257,13 @@ const PractiseQuiz = () => {
     setIsSaving(true); setSaveError(''); setSaveSuccess('');
 
     try {
-      // 🛡️ THE FIX: We tag the source so the Library knows where to render it!
       const contentSourceTag = localStorage.getItem('practiceDraftFileMeta') ? 'pdf' : 'syllabus';
 
       const payload = { 
           title: titleValue.trim(), 
           type: selectedMode, 
           category: localStorage.getItem('practiceSubject') || 'General', 
-          content: { items, meta: { mode: settings.mode }, source: contentSourceTag } // 👈 Source tag ensures standalone display
+          content: { items, meta: { mode: settings.mode }, source: contentSourceTag }
       };
       
       await axios.post('http://localhost:5000/api/library/save-content', payload, { withCredentials: true });

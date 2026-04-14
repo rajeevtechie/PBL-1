@@ -6,13 +6,9 @@ import styles from './UploadModal.module.css';
 const UploadModal = ({ isOpen, onClose, onComplete }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  
-  const [step, setStep] = useState('upload'); // upload, processing, done, error, conflict
-  
+  const [step, setStep] = useState('upload'); 
   const [errorMessage, setErrorMessage] = useState("");
   const [resultData, setResultData] = useState(null);
-  
-  // --- NEW: State for Duplicate Handling ---
   const [conflictData, setConflictData] = useState(null);
   const [syllabusId, setSyllabusId] = useState(null);
   
@@ -20,111 +16,96 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
 
   if (!isOpen) return null;
 
-  const handleDropZoneClick = () => {
-    fileInputRef.current.click();
-  };
+  const handleDropZoneClick = () => { fileInputRef.current.click(); };
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     if (file.type !== "application/pdf") {
-      setErrorMessage("Please upload a valid PDF file.");
-      setStep('error');
-      return;
+      setErrorMessage("Please upload a valid PDF file."); setStep('error'); return;
     }
-
     startUpload(file);
   };
 
   const startUpload = async (file) => {
-    setIsUploading(true);
-    setStep('upload');
-    setErrorMessage("");
-    setProgress(0);
+    setIsUploading(true); setStep('upload'); setErrorMessage(""); setProgress(0);
 
     const formData = new FormData();
     formData.append('file', file);
 
-    // 🛡️ THE FIX: Removed the outdated localStorage token check. 
-    // The backend will now act as the bouncer using the HttpOnly cookie.
-
     try {
       const response = await axios.post('http://localhost:5000/api/syllabus/upload', formData, {
-        withCredentials: true, // 🛡️ Tell Axios to send the secure cookie
-        headers: { 
-            'Content-Type': 'multipart/form-data'
-            // 🛡️ Removed the old Bearer token header
-        },
+        withCredentials: true,
+        headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          
-          if (percentCompleted < 90) {
-            setProgress(percentCompleted);
-          } else {
-            setStep('processing');
-            setProgress(100);
-          }
+          if (percentCompleted < 90) setProgress(percentCompleted);
+          else { setStep('processing'); setProgress(100); }
         }
       });
 
-      // ✅ Success (No Duplicates)
-      setResultData(response.data.data);
-      setSyllabusId(response.data.syllabusId);
-      setStep('done');
+      if (response.status === 202) {
+          const jobId = response.data.jobId;
+          
+          const pollInterval = setInterval(async () => {
+              try {
+                  const statusRes = await axios.get(`http://localhost:5000/api/syllabus/upload/status/${jobId}`, { withCredentials: true });
+                  
+                  if (statusRes.data.status === 'completed') {
+                      clearInterval(pollInterval);
+                      const result = statusRes.data.result;
+                      
+                      if (result.type === 'conflict') {
+                          setConflictData(result); setStep('conflict');
+                      } else {
+                          setResultData(result.data); setSyllabusId(result.syllabusId); setStep('done');
+                      }
+                      setIsUploading(false);
+                  } else if (statusRes.data.status === 'failed') {
+                      clearInterval(pollInterval);
+                      setErrorMessage("AI Failed to parse the PDF. Please try a simpler file."); setStep('error');
+                      setIsUploading(false);
+                  }
+              } catch (err) { 
+                  clearInterval(pollInterval);
+                  setErrorMessage("Error checking queue status."); setStep('error');
+                  setIsUploading(false);
+              }
+          }, 2000);
 
-    } catch (error) {
-      console.error("Upload Error:", error);
-      
-      // --- DUPLICATE DETECTED ---
-      if (error.response && error.response.status === 409) {
-        setConflictData(error.response.data);
-        setStep('conflict');
-      } 
-      // Handle standard errors (This will catch the 401 if the cookie is invalid!)
-      else if (error.response?.status === 401) {
-          setErrorMessage("Session expired. Please login again.");
-          setStep('error');
       } else {
-          setErrorMessage(error.response?.data?.message || "Connection failed. Is Backend running?");
-          setStep('error');
+          if (response.data.status === 'conflict') {
+              setConflictData(response.data); setStep('conflict');
+          } else {
+              setResultData(response.data.data); setSyllabusId(response.data.syllabusId); setStep('done');
+          }
+          setIsUploading(false);
       }
-    } finally {
-      setIsUploading(false);
-    }
+
+    } catch (err) { 
+      console.error("Upload Error:", err);
+      if (err.response?.status === 401) setErrorMessage("Session expired. Please login again.");
+      else setErrorMessage(err.response?.data?.message || "Connection failed. Is Backend running?");
+      setStep('error'); setIsUploading(false);
+    } 
   };
 
-  // --- NEW: Handle the Overwrite Confirmation ---
   const handleConfirmOverwrite = async () => {
-    setStep('processing'); 
-    setErrorMessage('');
-    
+    setStep('processing'); setErrorMessage('');
     try {
-      // 🛡️ THE FIX: Send the secure cookie instead of the manual token
       const response = await axios.post('http://localhost:5000/api/syllabus/confirm-upload', {
-        parsedData: conflictData.parsedData,
-        existingId: conflictData.existingId
-      }, {
-        withCredentials: true // 🛡️ Tell Axios to send the secure cookie
-      });
+        parsedData: conflictData.parsedData, existingId: conflictData.existingId
+      }, { withCredentials: true });
 
-      setResultData(response.data.data);
-      setSyllabusId(response.data.syllabusId);
-      setStep('done');
-
-    } catch {
-      setErrorMessage('Failed to overwrite the syllabus. Please try again.');
-      setStep('error');
+      setResultData(response.data.data); setSyllabusId(response.data.syllabusId); setStep('done');
+    } catch (err) { 
+      setErrorMessage('Failed to overwrite the syllabus. Please try again.'); setStep('error');
     }
   };
 
   const handleClose = () => {
-    setStep('upload');
-    setProgress(0);
-    setErrorMessage("");
-    setConflictData(null);
-    setResultData(null);
-    setSyllabusId(null);
+    setStep('upload'); setProgress(0); setErrorMessage("");
+    setConflictData(null); setResultData(null); setSyllabusId(null);
     onClose();
   };
 
@@ -133,58 +114,37 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
       <div className={styles.modal}>
         <button className={styles.closeBtn} onClick={handleClose}><X size={20} /></button>
         
-        {/* === STEP 1: UPLOAD & ERROR === */}
         {(step === 'upload' || step === 'error') && (
           <div className={styles.uploadState}>
-            <div className={styles.iconCircle}>
-              <UploadCloud size={32} />
-            </div>
+            <div className={styles.iconCircle}><UploadCloud size={32} /></div>
             <h2>Upload Syllabus</h2>
             <p>Upload your university PDF to generate a dual-track roadmap.</p>
-            
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept=".pdf" 
-                style={{ display: 'none' }} 
-            />
-
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".pdf" style={{ display: 'none' }} />
             <div className={styles.dropZone} onClick={handleDropZoneClick} style={{ cursor: 'pointer' }}>
-              <FileText size={24} className={styles.fileIcon} />
-              <span>Click to Select PDF</span>
+              <FileText size={24} className={styles.fileIcon} /><span>Click to Select PDF</span>
             </div>
-
             {isUploading && (
               <div className={styles.progressContainer}>
                 <div className={styles.progressBar} style={{ width: `${progress}%` }}></div>
                 <span style={{fontSize: '12px', color: '#666'}}>Uploading... {progress}%</span>
               </div>
             )}
-
-            {step === 'error' && (
-                <div style={{ marginTop: '15px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', justifyContent: 'center' }}>
-                    <AlertCircle size={16} />
-                    {errorMessage}
-                </div>
-            )}
+            {step === 'error' && (<div style={{ marginTop: '15px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', justifyContent: 'center' }}><AlertCircle size={16} />{errorMessage}</div>)}
           </div>
         )}
 
-        {/* === STEP 2: AI PROCESSING === */}
         {step === 'processing' && (
           <div className={styles.processingState} style={{ textAlign: 'center', padding: '20px 0' }}>
             <Loader2 size={48} className={styles.spinner} style={{ animation: 'spin 2s linear infinite', color: '#3b82f6', margin: '0 auto 20px auto', display: 'block' }} />
             <h3 style={{ color: '#f8fafc', marginBottom: '15px' }}>InsightED AI is working...</h3>
             <ul style={{ textAlign: 'left', color: '#94a3b8', listStyle: 'none', padding: 0, margin: '0 auto', maxWidth: '250px' }}>
-              <li style={{ marginBottom: '8px' }}>📥 PDF Uploaded Successfully</li>
+              <li style={{ marginBottom: '8px' }}>📥 PDF Securely Enqueued</li>
               <li style={{ marginBottom: '8px' }}>🧠 Gemini Analyzing Topics...</li>
               <li>📝 Extracting Units & Chapters...</li>
             </ul>
           </div>
         )}
 
-        {/* === STEP 3: DUPLICATE CONFLICT WARNING === */}
         {step === 'conflict' && conflictData && (
           <div style={{ backgroundColor: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '12px', padding: '25px', textAlign: 'center' }}>
             <AlertTriangle size={48} color="#eab308" style={{ marginBottom: '15px' }} />
@@ -193,46 +153,21 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
               You already have a roadmap saved for <strong>"{conflictData.parsedData.courseTitle}"</strong>. 
               Do you want to overwrite your old data with this new file?
             </p>
-            
             <div style={{ display: 'flex', gap: '15px' }}>
-              <button 
-                onClick={() => {
-                    setConflictData(null);
-                    setStep('upload');
-                }} 
-                style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid #475569', color: '#f8fafc', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleConfirmOverwrite} 
-                style={{ flex: 1, padding: '12px', background: '#eab308', border: 'none', color: '#1e293b', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' }}
-              >
-                Yes, Overwrite
-              </button>
+              <button onClick={() => { setConflictData(null); setStep('upload'); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid #475569', color: '#f8fafc', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>Cancel</button>
+              <button onClick={handleConfirmOverwrite} style={{ flex: 1, padding: '12px', background: '#eab308', border: 'none', color: '#1e293b', fontWeight: 'bold', borderRadius: '8px', cursor: 'pointer' }}>Yes, Overwrite</button>
             </div>
           </div>
         )}
 
-        {/* === STEP 4: SUCCESS / DONE === */}
         {step === 'done' && resultData && (
           <div className={styles.doneState} style={{ textAlign: 'center', padding: '20px 0' }}>
             <CheckCircle size={56} color="#10b981" style={{ margin: '0 auto 20px auto', display: 'block' }} />
             <h3 style={{ color: '#f8fafc', fontSize: '1.5rem', marginBottom: '10px' }}>Roadmap Generated!</h3>
-            <p style={{ color: '#94a3b8', marginBottom: '25px', lineHeight: '1.5' }}>
-                Successfully extracted <strong>{resultData.courseTitle}</strong> with 
-                <strong> {resultData.units.length} Units</strong>.
-            </p>
-            <button 
-                className={styles.primaryBtn} 
-                onClick={() => onComplete(syllabusId)}
-                style={{ width: '100%', padding: '14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
-            >
-              View Roadmap
-            </button>
+            <p style={{ color: '#94a3b8', marginBottom: '25px', lineHeight: '1.5' }}>Successfully extracted <strong>{resultData.courseTitle}</strong> with <strong> {resultData.units.length} Units</strong>.</p>
+            <button className={styles.primaryBtn} onClick={() => onComplete(syllabusId)} style={{ width: '100%', padding: '14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>View Roadmap</button>
           </div>
         )}
-
       </div>
     </div>
   );

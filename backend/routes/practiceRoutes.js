@@ -9,6 +9,8 @@ const upload = require("../middleware/uploadMiddleware"); // Adjust path if need
 // 1. AI Practice Generation Route
 router.post("/generate", authMiddleware, practiceController.generatePractice);
 
+router.get("/status/:jobId", authMiddleware, practiceController.checkJobStatus); // 👈 The frontend polling route
+
 // 2. Focus Mode Route
 router.post("/log-session", authMiddleware, practiceController.logStudySession);
 

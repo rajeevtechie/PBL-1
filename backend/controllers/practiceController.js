@@ -2,12 +2,12 @@ const db = require("../config/db");
 const { generateJson } = require("../services/geminiService");
 const { buildGeneratePrompt } = require("../utils/promptBuilder");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { aiQueue } = require("../config/queue"); // 🛡️ NEW: Import the AI Queue
 
 // Setup Gemini for Track B PDF extraction
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// 🛡️ FIXED: Added "notes" to the allowed list so the API doesn't reject it
 const allowedModes = new Set(["quiz", "short", "long", "case", "mock", "ai", "notes"]);
 const allowedDifficulties = new Set(["easy", "medium", "hard", "exam"]);
 
@@ -30,10 +30,7 @@ const normalizeByMode = (mode, data) => {
     case "case": return items.filter(item => toSafeString(item.scenario) && Array.isArray(item.questions));
     case "mock": return items.filter(item => toSafeString(item.section) && Array.isArray(item.items));
     case "ai": return items.filter(item => toSafeString(item.answer));
-    
-    // 🛡️ FIXED: Normalizer safely extracts the study notes
     case "notes": return items.filter(item => toSafeString(item.content)); 
-    
     default: return [];
   }
 };
@@ -54,14 +51,12 @@ const parseTopics = (rawText) => {
   }
 };
 
-// --- 1. GENERATE AI PRACTICE (Context-Aware) ---
+// --- 1. ENQUEUE AI PRACTICE (Track A/B Generation) ---
 exports.generatePractice = async (req, res, next) => {
   try {
     const { mode, topic, difficulty, numQuestions, content, userQuery, subjectName } = req.body || {};
 
     if (!mode || !allowedModes.has(mode)) return res.status(400).json({ success: false, message: "Invalid mode." });
-    
-    // Study Notes don't strictly require a topic in the same way, but it's good to have.
     if (mode !== "ai" && (!topic || !topic.trim())) return res.status(400).json({ success: false, message: "Topic is required." });
     if (mode === "ai" && (!userQuery || !userQuery.trim())) return res.status(400).json({ success: false, message: "userQuery is required." });
     
@@ -73,24 +68,51 @@ exports.generatePractice = async (req, res, next) => {
 
     if (!prompt) return res.status(400).json({ success: false, message: "Unable to build prompt." });
 
-    // We only enforce exact counts for questions, not study notes chunks
     if (mode !== "notes") {
         prompt += `\n\nCRITICAL INSTRUCTION: You MUST generate EXACTLY ${targetCount} items/questions.`;
     }
 
-    const data = await generateJson({ prompt, retries: 1 });
-    let normalized = normalizeByMode(mode, data);
+    // 🛡️ THE FIX: Add the heavy lifting to the Queue instead of awaiting Gemini here
+    const job = await aiQueue.add('generate-practice', { 
+        prompt, mode, targetCount 
+    });
 
-    if (mode !== "notes" && normalized.length > targetCount) {
-        normalized = normalized.slice(0, targetCount);
-    }
-
-    if (!normalized.length) return res.status(422).json({ success: false, message: "Generated content did not match format." });
-
-    res.status(200).json({ success: true, data: normalized });
+    // Return a 202 Accepted and hand the frontend a ticket number
+    res.status(202).json({ success: true, message: "Added to queue", jobId: job.id });
   } catch (error) {
     next(error);
   }
+};
+
+// --- 1.5. CHECK JOB STATUS (Frontend Polling Route) ---
+exports.checkJobStatus = async (req, res, next) => {
+    try {
+        const { jobId } = req.params;
+        const job = await aiQueue.getJob(jobId);
+        
+        if (!job) return res.status(404).json({ success: false, message: "Job not found" });
+
+        const state = await job.getState();
+
+        if (state === 'completed') {
+            const rawData = job.returnvalue; 
+            const mode = job.data.mode;
+            const targetCount = job.data.targetCount;
+
+            let normalized = normalizeByMode(mode, rawData);
+            if (mode !== "notes" && normalized.length > targetCount) {
+                normalized = normalized.slice(0, targetCount);
+            }
+
+            return res.status(200).json({ success: true, status: 'completed', data: normalized });
+        } else if (state === 'failed') {
+            return res.status(500).json({ success: false, status: 'failed', message: "AI Generation Failed." });
+        } else {
+            return res.status(202).json({ success: true, status: state }); 
+        }
+    } catch (error) {
+        next(error);
+    }
 };
 
 // --- 2. EXTRACT SYLLABUS TOPICS (Track A: Database Sync) ---

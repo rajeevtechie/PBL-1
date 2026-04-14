@@ -1,14 +1,10 @@
-const crypto = require('crypto'); // 👈 NEW: Built-in Node library for hashing
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const crypto = require('crypto'); 
 const db = require('../config/db');
-require('dotenv').config();
+const { aiQueue } = require('../config/queue');
+// 🛡️ NEW: Importing your centralized model!
+const { model } = require('../config/geminiConfig'); 
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
-// --- 1. UPLOAD & ANALYZE SYLLABUS ---
-// --- 1. UPLOAD & ANALYZE SYLLABUS (NOW WITH PDF CACHING!) ---
-// --- 1. UPLOAD & ANALYZE SYLLABUS (NOW WITH PDF CACHING!) ---
+// --- 1. UPLOAD & ANALYZE SYLLABUS (QUEUE ARCHITECTURE) ---
 exports.uploadSyllabus = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -16,77 +12,61 @@ exports.uploadSyllabus = async (req, res) => {
         const userId = req.user.id;
         console.log(`📤 Processing file: ${req.file.originalname} for User ID: ${userId}`);
 
-        // ⚡ 1. GENERATE A UNIQUE FINGERPRINT FOR THE PDF
         const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
         const cacheKey = `pdf_${fileHash}`;
 
-        let syllabusJson = null;
-
-        // ⚡ 2. CHECK THE CACHE
+        // ⚡ 1. CHECK THE CACHE (INSTANT DELIVERY)
         const [cachedData] = await db.execute('SELECT response_data FROM ai_cache WHERE cache_key = ?', [cacheKey]);
 
         if (cachedData.length > 0) {
-            console.log(`⚡ CACHE HIT! This exact PDF was parsed before. Loading instantly.`);
-            syllabusJson = JSON.parse(cachedData[0].response_data);
-        } else {
-            console.log(`🐢 CACHE MISS. First time seeing this PDF. Asking Gemini...`);
+            console.log(`⚡ CACHE HIT! Loading PDF instantly.`);
+            const syllabusJson = JSON.parse(cachedData[0].response_data);
+            const courseTitle = syllabusJson.courseTitle || "Untitled Course";
             
-            const filePart = { inlineData: { data: req.file.buffer.toString("base64"), mimeType: req.file.mimetype } };
-            
-            // 🛡️ THE FIX: We added strict Title Sanitization Rules to the Prompt!
-            const prompt = `
-            System: You are the InsightED academic curriculum parser. 
-            Task: Analyze this syllabus file and extract the course structure.
-            
-            CRITICAL RULE FOR courseTitle: Extract the core subject name ONLY. Strip out all filler words like "Syllabus of", "Course at", "Undergraduate", "Post Graduate", "Level", "Department of", "Semester", etc. 
-            Keep it to 1-4 words max. (Example: If the text says "Syllabus of Cyber Security Course at Undergraduate level", you must output exactly "Cyber Security").
-
-            Output Format: Strictly JSON. No markdown. No intro text.
-            Schema: { "courseTitle": "string", "units": [ { "unitNumber": number, "title": "string", "topics": ["string", "string"], "is_completed": false } ] }
-            `;
-
-            const result = await model.generateContent([prompt, filePart]);
-            let text = await result.response.text();
-            
-            // Robust JSON extraction
-            text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-            const startIndex = text.indexOf('{');
-            const endIndex = text.lastIndexOf('}');
-            if (startIndex !== -1 && endIndex !== -1) text = text.substring(startIndex, endIndex + 1);
-
-            syllabusJson = JSON.parse(text);
-
-            // ⚡ Save the AI's hard work to the database for the next user!
-            try {
-                await db.execute('INSERT INTO ai_cache (cache_key, response_data) VALUES (?, ?)', [cacheKey, JSON.stringify(syllabusJson)]);
-            } catch (cacheErr) {
-                console.warn("⚠️ Could not save PDF to cache:", cacheErr.message);
+            const [existing] = await db.execute('SELECT id FROM syllabuses WHERE user_id = ? AND course_title = ?', [userId, courseTitle]);
+            if (existing.length > 0) {
+                return res.status(200).json({ status: 'conflict', parsedData: syllabusJson, existingId: existing[0].id });
             }
+
+            const [resultDb] = await db.execute('INSERT INTO syllabuses (user_id, course_title, structure) VALUES (?, ?, ?)', [userId, courseTitle, JSON.stringify(syllabusJson)]);
+            try { await db.execute('INSERT INTO library_items (user_id, title, type, category) VALUES (?, ?, ?, ?)', [userId, courseTitle, 'folder', 'uploaded']); } catch(e){}
+            return res.status(200).json({ status: 'success', syllabusId: resultDb.insertId, data: syllabusJson });
         }
 
-        // --- 3. SAVE THE SYLLABUS TO THE USER'S ACCOUNT ---
-        const courseTitle = syllabusJson.courseTitle || "Untitled Course";
+        // 🐢 2. CACHE MISS: ADD TO QUEUE
+        console.log(`🐢 CACHE MISS. Adding PDF to background queue...`);
+        const base64Data = req.file.buffer.toString("base64");
+        const mimeType = req.file.mimetype;
 
-        const [existing] = await db.execute('SELECT id FROM syllabuses WHERE user_id = ? AND course_title = ?', [userId, courseTitle]);
-        if (existing.length > 0) {
-            console.log("⚠️ Syllabus already exists for this user. Prompting overwrite.");
-            return res.status(409).json({ message: `Syllabus exists.`, parsedData: syllabusJson, existingId: existing[0].id });
-        }
+        const job = await aiQueue.add('generate-roadmap', {
+            base64Data, mimeType, cacheKey, userId
+        });
 
-        const [resultDb] = await db.execute('INSERT INTO syllabuses (user_id, course_title, structure) VALUES (?, ?, ?)', [userId, courseTitle, JSON.stringify(syllabusJson)]);
-        
-        try {
-            await db.execute('INSERT INTO library_items (user_id, title, type, category) VALUES (?, ?, ?, ?)', [userId, courseTitle, 'folder', 'uploaded']);
-        } catch (libErr) {
-            console.warn("⚠️ Warning: Could not insert into library_items. Skipping safely.");
-        }
-
-        console.log("✅ Upload & Analysis Successful!");
-        res.status(201).json({ message: "Processed successfully", syllabusId: resultDb.insertId, data: syllabusJson });
+        res.status(202).json({ message: "Added to queue", jobId: job.id });
     } catch (error) { 
         console.error("❌ Upload Error:", error);
         res.status(500).json({ message: "AI Processing Failed", error: error.message }); 
     }
+};
+
+// --- 1.5 CHECK UPLOAD STATUS (Frontend Polling) ---
+exports.checkUploadJobStatus = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const job = await aiQueue.getJob(jobId);
+        
+        if (!job) return res.status(404).json({ message: "Job not found" });
+
+        const state = await job.getState();
+
+        if (state === 'completed') {
+            return res.status(200).json({ status: 'completed', result: job.returnvalue });
+        } else if (state === 'failed') {
+            return res.status(500).json({ status: 'failed', message: "AI Generation Failed." });
+        } else {
+            return res.status(202).json({ status: state }); // processing
+        }
+    } catch (error) { res.status(500).json({ message: "Failed to check status" }); }
 };
 
 // --- 2. CONFIRM OVERWRITE EXISTING SYLLABUS ---
@@ -103,39 +83,31 @@ exports.confirmUpload = async (req, res) => {
 exports.getAggregateProgress = async (req, res) => {
     try {
         const userId = req.user.id;
-
         const [syllabuses] = await db.execute('SELECT id, course_title, structure FROM syllabuses WHERE user_id = ?', [userId]);
 
-        let totalAcademicUnits = 0;
-        let completedAcademicUnits = 0;
-        let totalCareerRecs = 0;
-        let completedCareerRecs = 0;
+        let totalAcademicUnits = 0; let completedAcademicUnits = 0;
+        let totalCareerRecs = 0; let completedCareerRecs = 0;
         const details = [];
 
         const [recs] = await db.execute('SELECT syllabus_id, is_completed FROM roadmap_recommendations WHERE user_id = ?', [userId]);
 
         for (const syl of syllabuses) {
             const structure = typeof syl.structure === 'string' ? JSON.parse(syl.structure) : syl.structure;
-
-            let subjTotalUnits = 0;
-            let subjCompletedUnits = 0;
+            let subjTotalUnits = 0; let subjCompletedUnits = 0;
             if (structure && structure.units) {
                 subjTotalUnits = structure.units.length;
                 subjCompletedUnits = structure.units.filter(u => u.is_completed === true || u.completed === true || u.is_completed === 1).length;
             }
             const subjAcademicProg = subjTotalUnits === 0 ? 0 : Math.round((subjCompletedUnits / subjTotalUnits) * 100);
 
-            totalAcademicUnits += subjTotalUnits;
-            completedAcademicUnits += subjCompletedUnits;
+            totalAcademicUnits += subjTotalUnits; completedAcademicUnits += subjCompletedUnits;
 
             const subjRecs = recs.filter(r => r.syllabus_id === syl.id);
             const subjTotalRecs = subjRecs.length;
             const subjCompletedRecs = subjRecs.filter(r => r.is_completed === true || r.is_completed === 1).length;
             const subjCareerProg = subjTotalRecs === 0 ? 0 : Math.round((subjCompletedRecs / subjTotalRecs) * 100);
 
-            totalCareerRecs += subjTotalRecs;
-            completedCareerRecs += subjCompletedRecs;
-
+            totalCareerRecs += subjTotalRecs; completedCareerRecs += subjCompletedRecs;
             details.push({ id: syl.id, courseTitle: syl.course_title, academicProgress: subjAcademicProg, careerProgress: subjCareerProg });
         }
 
@@ -143,9 +115,7 @@ exports.getAggregateProgress = async (req, res) => {
         const careerAvg = totalCareerRecs === 0 ? 0 : Math.round((completedCareerRecs / totalCareerRecs) * 100);
 
         res.status(200).json({ academicProgress: academicAvg, careerProgress: careerAvg, details: details });
-    } catch (error) { 
-        res.status(500).json({ message: "Failed to calculate aggregate progress" }); 
-    }
+    } catch (error) { res.status(500).json({ message: "Failed to calculate aggregate progress" }); }
 };
 
 // --- 4. LIST ALL SUBJECTS ---
@@ -194,14 +164,13 @@ exports.getCareerInsights = async (req, res) => {
         const [globalGoal] = await db.execute('SELECT target_role FROM career_goals WHERE user_id = ? AND syllabus_id IS NULL', [userId]);
         
         const activeRole = localGoal.length > 0 ? localGoal[0].target_role : (globalGoal.length > 0 ? globalGoal[0].target_role : null);
-
         const [recs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
 
         res.status(200).json({ targetRole: activeRole, recommendations: recs });
     } catch (error) { res.status(500).json({ message: "Failed" }); }
 };
 
-// --- 8. ✅ NEW: GENERATE CAREER INSIGHTS (WITH DATABASE CACHING) ---
+// --- 8. GENERATE CAREER INSIGHTS (QUEUE ARCHITECTURE) ---
 exports.generateCareerInsights = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -221,87 +190,46 @@ exports.generateCareerInsights = async (req, res) => {
         
         const courseTitle = rows[0].course_title;
         const academicStructure = rows[0].structure;
-
         const isAcademicMode = /academic|exam|examination|university|pass|score|college|grade/i.test(targetRole);
         
-        // ⚡ THE CACHING ENGINE START ⚡
-        // Create a unique key based on the course name and the user's goal
         const rawKey = `insights_${courseTitle}_${targetRole}`;
         const cacheKey = rawKey.toLowerCase().replace(/[^a-z0-9]/g, '_'); 
 
-        let careerJson = null;
-
-        // 1. Check if we already asked Gemini this exact question
+        // 1. Check Cache
         const [cachedData] = await db.execute('SELECT response_data FROM ai_cache WHERE cache_key = ?', [cacheKey]);
-
         if (cachedData.length > 0) {
-            console.log(`⚡ CACHE HIT! Loading ${targetRole} roadmap for ${courseTitle} instantly.`);
-            careerJson = JSON.parse(cachedData[0].response_data);
+            console.log(`⚡ CACHE HIT! Returning instantly.`);
+            // Fetch existing recs from DB to ensure IDs are correct
+            const [existingRecs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
+            return res.status(200).json({ message: "Loaded from cache", recommendations: existingRecs });
+        }
+
+        // 2. Add to Queue
+        console.log(`🐢 CACHE MISS. Adding Career generation to queue...`);
+        const job = await aiQueue.add('generate-career', {
+            courseTitle, academicStructure, targetRole, isAcademicMode, userId, syllabusId, isGlobal, cacheKey
+        });
+
+        res.status(202).json({ message: "Added to queue", jobId: job.id });
+    } catch (error) { res.status(500).json({ message: "AI Error", error: error.message }); }
+};
+
+// --- 8.5 CHECK CAREER JOB STATUS (Frontend Polling) ---
+exports.checkCareerJobStatus = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        const job = await aiQueue.getJob(jobId);
+        if (!job) return res.status(404).json({ message: "Job not found" });
+
+        const state = await job.getState();
+        if (state === 'completed') {
+            return res.status(200).json({ status: 'completed', recommendations: job.returnvalue });
+        } else if (state === 'failed') {
+            return res.status(500).json({ status: 'failed', message: "AI Generation Failed." });
         } else {
-            console.log(`🐢 CACHE MISS. Asking Gemini for ${targetRole} roadmap for ${courseTitle}...`);
-            
-            let prompt = "";
-            if (isAcademicMode) {
-                prompt = `
-                System: You are an expert university professor and exam predictor.
-                Task: Analyze the following syllabus for "${courseTitle}". Predict the top 3 to 5 highest-weightage exam topics.
-                Syllabus: ${typeof academicStructure === 'string' ? academicStructure : JSON.stringify(academicStructure)}
-                Output Format: Strictly JSON. Schema: {"missingSkills": [{"topic_name": "string", "category": "Exam Prediction", "importance_level": "Critical" | "High" | "Medium"}]}
-                `;
-            } else {
-                prompt = `
-                System: You are an elite tech industry career advisor.
-                Task: Analyze this specific academic syllabus ("${courseTitle}"). The user wants to be a "${targetRole}". 
-                Identify 3 to 5 critical industry skills strictly related to this subject that the university is NOT teaching them.
-                Syllabus: ${typeof academicStructure === 'string' ? academicStructure : JSON.stringify(academicStructure)}
-                Output Format: Strictly JSON. Schema: {"missingSkills": [{"topic_name": "string", "category": "Industry Gap", "importance_level": "Critical" | "High"}]}
-                `;
-            }
-
-            const result = await model.generateContent(prompt);
-            let text = await result.response.text();
-
-            text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
-            const startIndex = text.indexOf('{');
-            const endIndex = text.lastIndexOf('}');
-            if (startIndex !== -1 && endIndex !== -1) text = text.substring(startIndex, endIndex + 1);
-            
-            careerJson = JSON.parse(text);
-
-            // 2. Save it to the cache so the next user gets it instantly!
-            try {
-                await db.execute('INSERT INTO ai_cache (cache_key, response_data) VALUES (?, ?)', [cacheKey, JSON.stringify(careerJson)]);
-            } catch (cacheErr) {
-                console.warn("⚠️ Could not save to cache (table might not exist yet):", cacheErr.message);
-            }
+            return res.status(202).json({ status: state }); // Still processing
         }
-        // ⚡ THE CACHING ENGINE END ⚡
-
-        const skills = careerJson.missingSkills || careerJson.missing_skills || careerJson.skills || [];
-
-        // Save Goal appropriately (Global vs Local)
-        if (isGlobal !== false) {
-            await db.execute('DELETE FROM career_goals WHERE user_id = ? AND syllabus_id IS NULL', [userId]);
-            await db.execute('INSERT INTO career_goals (user_id, syllabus_id, target_role) VALUES (?, NULL, ?)', [userId, targetRole]);
-        } else {
-            await db.execute('DELETE FROM career_goals WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
-            await db.execute('INSERT INTO career_goals (user_id, syllabus_id, target_role) VALUES (?, ?, ?)', [userId, syllabusId, targetRole]);
-        }
-
-        // Save specific recommendations to this syllabus ID
-        await db.execute('DELETE FROM roadmap_recommendations WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
-        for (const skill of skills) {
-            await db.execute(
-                'INSERT INTO roadmap_recommendations (user_id, syllabus_id, topic_name, category, importance_level) VALUES (?, ?, ?, ?, ?)',
-                [userId, syllabusId, skill.topic_name || "Skill", skill.category || "General", skill.importance_level || "Medium"]
-            );
-        }
-
-        const [newRecs] = await db.execute('SELECT * FROM roadmap_recommendations WHERE user_id = ? AND syllabus_id = ?', [userId, syllabusId]);
-        res.status(200).json({ message: "Generated successfully", recommendations: newRecs });
-    } catch (error) { 
-        res.status(500).json({ message: "AI Error", error: error.message }); 
-    }
+    } catch (error) { res.status(500).json({ message: "Failed to check status" }); }
 };
 
 // --- 9. TOGGLE RECOMMENDATION COMPLETION ---

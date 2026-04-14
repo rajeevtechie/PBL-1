@@ -18,6 +18,7 @@ const userRoutes = require('./routes/userRoutes');
 
 const errorHandler = require('./middlewares/errorHandler');
 const startWeeklyEmailCron = require('./cron/weeklySummary');
+require('./workers/aiWorker'); // 👈 Starts the background queue worker
 
 const app = express();
 const PORT = process.env.PORT || 5000;
