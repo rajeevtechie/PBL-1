@@ -66,7 +66,7 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
                       setErrorMessage("AI Failed to parse the PDF. Please try a simpler file."); setStep('error');
                       setIsUploading(false);
                   }
-              } catch (err) { 
+              } catch  { 
                   clearInterval(pollInterval);
                   setErrorMessage("Error checking queue status."); setStep('error');
                   setIsUploading(false);
@@ -98,7 +98,7 @@ const UploadModal = ({ isOpen, onClose, onComplete }) => {
       }, { withCredentials: true });
 
       setResultData(response.data.data); setSyllabusId(response.data.syllabusId); setStep('done');
-    } catch (err) { 
+    } catch  { 
       setErrorMessage('Failed to overwrite the syllabus. Please try again.'); setStep('error');
     }
   };
