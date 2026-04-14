@@ -21,9 +21,7 @@ exports.register = async (req, res) => {
             return res.status(400).json({ message: "Please enter a valid email address." });
         }
 
-        // 🛡️ STRICT PASSWORD VALIDATOR
         const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-        
         if (!passwordRegex.test(password)) {
             return res.status(400).json({ 
                 message: "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character." 
@@ -36,16 +34,15 @@ exports.register = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
-        
         const otp = generateOTP();
         const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); 
 
-        // Note: tour_flags defaults to '{}' from our new SQL schema
         const [result] = await db.execute(
             'INSERT INTO users (name, email, password_hash, role, is_verified, verification_otp, otp_expires_at) VALUES (?, ?, ?, ?, FALSE, ?, ?)',
             [name, email, hashedPassword, 'student', otp, otpExpiry]
         );
 
+        // Uses default 'register' template
         await sendOTP(email, otp);
 
         res.status(201).json({
@@ -54,7 +51,6 @@ exports.register = async (req, res) => {
             requireVerification: true,
             email: email 
         });
-
     } catch (error) {
         console.error("Register Error:", error);
         res.status(500).json({ message: "Internal server error." });
@@ -71,22 +67,11 @@ exports.verifyEmail = async (req, res) => {
 
         const user = users[0];
 
-        if (user.is_verified) {
-            return res.status(400).json({ message: "Email is already verified." });
-        }
+        if (user.is_verified) return res.status(400).json({ message: "Email is already verified." });
+        if (user.verification_otp !== otp) return res.status(400).json({ message: "Invalid verification code." });
+        if (new Date() > new Date(user.otp_expires_at)) return res.status(400).json({ message: "Verification code has expired. Please request a new one." });
 
-        if (user.verification_otp !== otp) {
-            return res.status(400).json({ message: "Invalid verification code." });
-        }
-
-        if (new Date() > new Date(user.otp_expires_at)) {
-            return res.status(400).json({ message: "Verification code has expired. Please request a new one." });
-        }
-
-        await db.execute(
-            'UPDATE users SET is_verified = TRUE, verification_otp = NULL, otp_expires_at = NULL WHERE email = ?',
-            [email]
-        );
+        await db.execute('UPDATE users SET is_verified = TRUE, verification_otp = NULL, otp_expires_at = NULL WHERE email = ?', [email]);
 
         const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
@@ -97,49 +82,34 @@ exports.verifyEmail = async (req, res) => {
         res.status(200).json({
             success: true,
             message: "Email verified successfully! Logging you in...",
-            // 🛡️ Pass tour_flags to the frontend
             user: { id: user.id, name: user.name, email: user.email, role: user.role, tour_flags: user.tour_flags || {} }
         });
-
-    } catch (error) {
-        console.error("Verify Error:", error);
-        res.status(500).json({ message: "Internal server error." });
-    }
+    } catch (error) { res.status(500).json({ message: "Internal server error." }); }
 };
 
 // --- 2.5 RESEND OTP ---
 exports.resendOTP = async (req, res) => {
     try {
         const { email } = req.body;
-
         const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
         if (users.length === 0) return res.status(400).json({ message: "User not found." });
 
         const user = users[0];
-
-        if (user.is_verified) {
-            return res.status(400).json({ message: "Email is already verified." });
-        }
+        if (user.is_verified) return res.status(400).json({ message: "Email is already verified." });
 
         const otp = generateOTP();
         const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
-        await db.execute(
-            'UPDATE users SET verification_otp = ?, otp_expires_at = ? WHERE email = ?',
-            [otp, otpExpiry, email]
-        );
+        await db.execute('UPDATE users SET verification_otp = ?, otp_expires_at = ? WHERE email = ?', [otp, otpExpiry, email]);
 
+        // Uses default 'register' template
         await sendOTP(email, otp);
 
         res.status(200).json({ success: true, message: "A new verification code has been sent." });
-
-    } catch (error) {
-        console.error("Resend OTP Error:", error);
-        res.status(500).json({ message: "Failed to resend code. Please try again." });
-    }
+    } catch (error) { res.status(500).json({ message: "Failed to resend code. Please try again." }); }
 };
 
-// --- 3. LOGIN (Unified & Cleaned) ---
+// --- 3. LOGIN ---
 exports.login = async (req, res) => {
     try {
         const { email, password, rememberMe } = req.body;
@@ -149,11 +119,8 @@ exports.login = async (req, res) => {
 
         const user = users[0];
 
-        // 🛡️ THE BOUNCER: Check if deactivated
         if (user.is_active === 0 || user.is_active === false) {
-            return res.status(403).json({ 
-                message: "This account has been deactivated. Please contact support to restore it." 
-            });
+            return res.status(403).json({ message: "This account has been deactivated. Please contact support to restore it." });
         }
 
         const isMatch = await bcrypt.compare(password, user.password_hash);
@@ -169,29 +136,16 @@ exports.login = async (req, res) => {
 
         const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-        // 🛡️ REMEMBER ME LOGIC
-        const cookieOptions = {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict'
-        };
-
-        if (rememberMe) {
-            cookieOptions.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 Days
-        } // If false, maxAge is omitted, creating a Session-only cookie!
+        const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' };
+        if (rememberMe) cookieOptions.maxAge = 30 * 24 * 60 * 60 * 1000; 
 
         res.cookie('token', token, cookieOptions);
 
         res.status(200).json({
             success: true, message: "Login successful",
-            // 🛡️ THE HYBRID FIX: Send the tour_flags to the frontend!
             user: { id: user.id, name: user.name, email: user.email, role: user.role, tour_flags: user.tour_flags || {} }
         });
-
-    } catch (error) {
-        console.error("Login Error:", error);
-        res.status(500).json({ message: "Internal server error." });
-    }
+    } catch (error) { res.status(500).json({ message: "Internal server error." }); }
 };
 
 // --- 4. GUEST LOGIN & LOGOUT ---
@@ -206,13 +160,9 @@ exports.guestLogin = async (req, res) => {
 
         res.status(200).json({
             success: true, message: "Logged in as Guest",
-            // Give guest a mock empty flag object
             user: { id: guestId, name: "Guest Student", email: "guest@insighted.com", role: "guest", tour_flags: {} }
         });
-    } catch (error) {
-        console.error("Guest Login Error:", error);
-        res.status(500).json({ message: "Guest access failed." });
-    }
+    } catch (error) { res.status(500).json({ message: "Guest access failed." }); }
 };
 
 exports.logout = (req, res) => {
@@ -238,13 +188,11 @@ exports.forgotPassword = async (req, res) => {
             [otp, otpExpiry, email]
         );
 
-        await sendOTP(email, otp); 
+        // 🛡️ UPGRADE: Explicitly pass 'reset' to use the secure red template!
+        await sendOTP(email, otp, 'reset'); 
 
         res.status(200).json({ success: true, message: "If that email exists, an OTP has been sent." });
-    } catch (error) {
-        console.error("Forgot Password Error:", error);
-        res.status(500).json({ message: "Internal server error." });
-    }
+    } catch (error) { res.status(500).json({ message: "Internal server error." }); }
 };
 
 exports.verifyResetOtp = async (req, res) => {
@@ -260,14 +208,10 @@ exports.verifyResetOtp = async (req, res) => {
         }
 
         const resetToken = jwt.sign({ id: user.id, purpose: 'password_reset' }, process.env.JWT_SECRET, { expiresIn: '15m' });
-
         await db.execute('UPDATE users SET verification_otp = NULL, otp_expires_at = NULL WHERE email = ?', [email]);
 
         res.status(200).json({ success: true, resetToken });
-    } catch (error) {
-        console.error("Verify Reset OTP Error:", error);
-        res.status(500).json({ message: "Internal server error." });
-    }
+    } catch (error) { res.status(500).json({ message: "Internal server error." }); }
 };
 
 exports.resetPassword = async (req, res) => {
@@ -291,8 +235,5 @@ exports.resetPassword = async (req, res) => {
         await db.execute('UPDATE users SET password_hash = ? WHERE id = ?', [hashedPassword, decoded.id]);
 
         res.status(200).json({ success: true, message: "Password updated successfully! You can now log in." });
-    } catch (error) {
-        console.error("Reset Password Error:", error);
-        res.status(500).json({ message: "Internal server error." });
-    }
+    } catch (error) { res.status(500).json({ message: "Internal server error." }); }
 };

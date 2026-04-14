@@ -10,13 +10,11 @@ const db = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const syllabusRoutes = require('./routes/syllabusRoutes'); 
 const practiceRoutes = require('./routes/practiceRoutes');
-// 🗑️ DELETED: practiceLabRoutes import
 const libraryRoutes = require('./routes/libraryRoutes');
 const focusRoutes = require('./routes/focusRoutes');
 const insightRoutes = require('./routes/insightRoutes');
 const userRoutes = require('./routes/userRoutes'); 
 
-const errorHandler = require('./middlewares/errorHandler');
 const startWeeklyEmailCron = require('./cron/weeklySummary');
 require('./workers/aiWorker'); // 👈 Starts the background queue worker
 
@@ -34,8 +32,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(cookieParser()); 
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- Security Middleware ---
 
@@ -60,7 +56,6 @@ app.use('/api/syllabus', syllabusRoutes);
 
 // 3. Practice Lab (Unified Engine)
 app.use('/api/practice', practiceRoutes); 
-// 🗑️ DELETED: practiceLabRoutes mount
 
 // 4. Library (Secure PDF Blob & Split-Screen View)
 app.use('/api/library', libraryRoutes); 
@@ -78,9 +73,6 @@ app.use('/api/users', userRoutes);
 app.get('/', (req, res) => {
     res.send('InsightED API is Secure and Running Smoothly...');
 });
-
-// --- Error Handling (Must be last) ---
-app.use(errorHandler);
 
 // --- Start Server ---
 app.listen(PORT, () => {
