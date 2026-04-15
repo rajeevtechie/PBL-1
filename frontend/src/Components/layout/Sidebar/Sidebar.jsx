@@ -5,6 +5,7 @@ import {
   LayoutDashboard, 
   Map, 
   Clock, 
+  Calendar, // 🌟 NEW: Imported Calendar Icon
   BarChart2, 
   CheckSquare, 
   Zap, 
@@ -23,22 +24,16 @@ const Sidebar = () => {
 
   const handleLogout = async () => {
     try {
-      // 1. Tell the backend to destroy the secure HttpOnly cookie
       await axios.post('http://localhost:5000/api/auth/logout', {}, { withCredentials: true });
     } catch (error) {
       console.error("Backend logout failed, but clearing local session anyway.", error);
     } finally {
-      // 2. 🛡️ THE SMART CLEAR: Wipes user data but protects Tour Guides and Preferences!
       Object.keys(localStorage).forEach(key => {
           if (!key.startsWith('hasSeen') && key !== 'appPreferences' && key !== 'darkMode') {
               localStorage.removeItem(key);
           }
       });
-      
-      // Clear session storage just to be safe
       sessionStorage.clear();
-      
-      // 3. Send them back to the login page
       navigate('/login');
     }
   };
@@ -80,6 +75,15 @@ const Sidebar = () => {
         >
           <Clock size={20} />
           <span>Focus Mode</span>
+        </NavLink>
+
+        {/* 🌟 NEW: Calendar Navigation Link */}
+        <NavLink 
+          to="/calendar" 
+          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
+        >
+          <Calendar size={20} />
+          <span>Schedule</span>
         </NavLink>
 
         <NavLink 

@@ -5,6 +5,9 @@ import styles from './MainLayout.module.css';
 import { useFocus } from '../../../context/FocusContext'; 
 import { Play, Pause, Maximize2, GripVertical } from 'lucide-react';
 
+// 🌟 NEW: Import the Push Notification logic
+import { subscribeToPushNotifications } from '../../../utils/pushNotifications';
+
 const MainLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,6 +62,9 @@ const MainLayout = () => {
     const savedPrefs = JSON.parse(localStorage.getItem('appPreferences') || '{"darkMode":true}');
     if (!savedPrefs.darkMode) document.body.classList.add('light-theme');
     else document.body.classList.remove('light-theme');
+
+    // 🌟 NEW: Initialize Push Notifications when the layout mounts!
+    subscribeToPushNotifications();
 
     const handleProfileUpdate = () => {
       setUserName(localStorage.getItem('userName') || 'User');

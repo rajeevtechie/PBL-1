@@ -22,7 +22,8 @@ import PractiseTopics from './pages/practise_lab/practise_topics';
 import PractiseQuiz from './pages/practise_lab/practise_quiz';
 import Library from './pages/library/Library';
 import Insights from './pages/insights/Insights';     
-import Settings from './pages/settings/Settings';     
+import Settings from './pages/settings/Settings';  
+import CalendarView from './pages/Calendar/CalendarView'; // 🌟 NEW: Calendar Import   
 
 // === STANDALONE PAGES ===
 import StudySession from './pages/study/StudySession'; 
@@ -55,6 +56,7 @@ function App() {
             <Route path="/library" element={<Library />} />
             <Route path="/insights" element={<Insights />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/calendar" element={<CalendarView />} /> {/* 🌟 NEW: Calendar Route */}
           </Route>
 
           {/* ====================================================
