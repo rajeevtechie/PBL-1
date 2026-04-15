@@ -4,6 +4,9 @@ import axios from 'axios';
 import { User, Bell, Lock, Save, LogOut, Camera, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import styles from './Settings.module.css';
 
+// 🌟 NEW: Import the push utility for the toggle switch
+import { subscribeToPushNotifications } from '../../utils/pushNotifications'; 
+
 const Settings = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile'); 
@@ -106,16 +109,33 @@ const Settings = () => {
       return next;
     });
 
+    // Handle Email Notifications saving
     if (key === 'emailNotifs') {
       try {
         const newEmailState = !preferences.emailNotifs; 
         
         await axios.put('http://localhost:5000/api/users/preferences', 
           { emailNotifs: newEmailState },
-          { withCredentials: true } // 🛡️ Using secure cookie
+          { withCredentials: true } 
         );
       } catch (error) {
         console.error("Failed to save email preference to database:", error);
+      }
+    }
+
+    // 🌟 NEW: Handle Push Notifications Toggle (On/Off)
+    if (key === 'studyReminders') {
+      try {
+        const isTurningOn = !preferences.studyReminders;
+        if (isTurningOn) {
+          // Re-subscribe them and save to DB
+          await subscribeToPushNotifications();
+        } else {
+          // Wipe their subscription from the DB so the Cron engine ignores them
+          await axios.delete('http://localhost:5000/api/push/unsubscribe', { withCredentials: true });
+        }
+      } catch (error) {
+        console.error("Failed to update push preferences:", error);
       }
     }
   };
@@ -126,7 +146,7 @@ const Settings = () => {
     try {
       await axios.put('http://localhost:5000/api/users/parent-email', 
         { parentEmail },
-        { withCredentials: true } // 🛡️ Using secure cookie
+        { withCredentials: true } 
       );
       localStorage.setItem('parentEmail', parentEmail);
       alert("Guardian email saved successfully!"); 
@@ -158,7 +178,6 @@ const Settings = () => {
     setSecMessage({ type: '', text: '' });
 
     try {
-      // 🛡️ THE REAL API CALL
       const response = await axios.put('http://localhost:5000/api/users/update-password', {
         currentPassword: passwords.current,
         newPassword: passwords.new
@@ -180,10 +199,8 @@ const Settings = () => {
     
     if (isConfirmed) {
       try {
-        // Tell the backend to flip the is_active switch to false
         await axios.delete('http://localhost:5000/api/users/delete-account', { withCredentials: true });
         
-        // 🛡️ THE SMART CLEAR: Wipes user data but protects Tour Guides and Preferences!
         Object.keys(localStorage).forEach(key => {
             if (!key.startsWith('hasSeen') && key !== 'appPreferences' && key !== 'darkMode') {
                 localStorage.removeItem(key);

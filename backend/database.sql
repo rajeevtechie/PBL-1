@@ -139,6 +139,28 @@ CREATE TABLE IF NOT EXISTS ai_cache (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Run this in your MySQL client/terminal
+CREATE TABLE IF NOT EXISTS scheduled_events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    event_type ENUM('focus', 'quiz', 'task', 'custom') DEFAULT 'custom',
+    reference_url VARCHAR(255) NULL, -- Where to redirect them when they click the event/notification
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NOT NULL,
+    is_notified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    subscription_data JSON NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- 12. Indexes for Performance 
 CREATE INDEX idx_library_user_category ON library_items(user_id, category);
 CREATE INDEX idx_tasks_user_status ON tasks(user_id, status);
