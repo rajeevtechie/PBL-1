@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { 
   BookOpen, Briefcase, CheckCircle, Circle, Lock, 
-  AlertTriangle, Loader2, ChevronRight, Sparkles, Edit2, GraduationCap, ChevronDown
+  AlertTriangle, Loader2, ChevronRight, Sparkles, Edit2, GraduationCap
 } from 'lucide-react';
 import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import styles from './Roadmap.module.css';
-import { markTourCompleted } from '../../utils/tourSync'; // Adjust path if needed!
+import { markTourCompleted } from '../../utils/tourSync'; 
 
 const Roadmap = () => {
   const [roadmap, setRoadmap] = useState(null);
@@ -29,7 +29,7 @@ const Roadmap = () => {
   const tourSteps = [
     {
       target: '#tour-academic',
-      placement: 'center', // 🛡️ FIX: Center over the column to prevent overflow
+      placement: 'center',
       content: (
         <div>
           <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Your Academic Path 📚</h3>
@@ -40,7 +40,7 @@ const Roadmap = () => {
     },
     {
       target: '#tour-career',
-      placement: 'center', // 🛡️ FIX: Center over the column to prevent overflow
+      placement: 'center',
       content: (
         <div>
           <h3 style={{ margin: '0 0 10px 0', color: '#f8fafc' }}>Bridge the Gap 🌉</h3>
@@ -54,6 +54,19 @@ const Roadmap = () => {
     setExpandedUnits(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
+  const fetchCareerData = useCallback(async (syllabusId) => {
+    try {
+        const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusId}&t=${Date.now()}`, { withCredentials: true });
+        setCareerData(resCareer.data);
+        if (resCareer.data.targetRole) {
+            setTargetRole(resCareer.data.targetRole);
+        }
+    } catch (err) {
+        console.error("Failed to fetch career insights", err);
+        setCareerData(null);
+    }
+  }, []);
+
   useEffect(() => {
     const fetchSubjectList = async () => {
         try {
@@ -66,7 +79,6 @@ const Roadmap = () => {
     fetchSubjectList();
   }, []);
 
-  // 1. Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -74,31 +86,20 @@ const Roadmap = () => {
       
       try {
         const endpoint = activeId === 'latest' 
-            ? `http://localhost:5000/api/syllabus/latest` 
-            : `http://localhost:5000/api/syllabus/${activeId}`;
+            ? `http://localhost:5000/api/syllabus/latest?t=${Date.now()}` 
+            : `http://localhost:5000/api/syllabus/${activeId}?t=${Date.now()}`;
 
         const resSyllabus = await axios.get(endpoint, { withCredentials: true });
         setRoadmap(resSyllabus.data);
 
-        if (activeId === 'latest' && resSyllabus.data.id) {
-            setActiveId(resSyllabus.data.id.toString());
-            localStorage.setItem('activeSyllabusId', resSyllabus.data.id.toString());
+        const currentSyllabusId = resSyllabus.data.id;
+
+        if (activeId === 'latest' && currentSyllabusId) {
+            setActiveId(currentSyllabusId.toString());
+            localStorage.setItem('activeSyllabusId', currentSyllabusId.toString());
         }
 
-        try {
-            const syllabusIdQuery = resSyllabus.data.id || activeId;
-            const resCareer = await axios.get(`http://localhost:5000/api/syllabus/career-insights?syllabusId=${syllabusIdQuery}`, { withCredentials: true });
-            
-            setCareerData(resCareer.data);
-            if (resCareer.data.targetRole) {
-                setTargetRole(resCareer.data.targetRole);
-            } else {
-                setTargetRole(""); 
-            }
-        } catch {
-            setCareerData(null);
-            setTargetRole("");
-        }
+        await fetchCareerData(currentSyllabusId);
 
       } catch (err) {
         setError(err.response?.status === 404 ? "No roadmap found. Upload a syllabus first!" : "Failed to load your learning path.");
@@ -107,33 +108,24 @@ const Roadmap = () => {
       }
     };
     fetchData();
-  }, [activeId]);
+  }, [activeId, fetchCareerData]);
 
-  // 2. 🛡️ THE ARCHITECTURE FIX: Bulletproof Tour Trigger (DOM Polling)
   useEffect(() => {
     const hasSeenTour = localStorage.getItem('hasSeenRoadmapTour');
-
-    // Only start polling if they haven't seen it, there is no error, and loading is finished
     if (!hasSeenTour && !error && !loading) {
       const checkDOM = setInterval(() => {
         const targetEl = document.querySelector('#tour-academic');
-        
         if (targetEl) {
-          setRunTour(true);        // Start the tour!
-          
-          // 🛡️ THE SPEEDRUNNER FIX: Mark as seen the exact millisecond it fires
+          setRunTour(true);
           markTourCompleted('hasSeenRoadmapTour');
-          
-          clearInterval(checkDOM); // Stop checking!
+          clearInterval(checkDOM);
         }
       }, 100);
-
-      // Cleanup function prevents memory leaks if user navigates away
       return () => clearInterval(checkDOM); 
     }
   }, [loading, error]);
 
-
+  // 🌟 THE FIX: Aggressive Cache-Busting and Direct State Injection
   const handleAnalyzeGaps = async () => {
     if (!targetRole.trim()) {
         alert("Please enter a target role or objective first!"); return;
@@ -142,14 +134,87 @@ const Roadmap = () => {
     setAnalyzing(true);
     try {
         const currentId = roadmap?.id || activeId; 
-        const response = await axios.post(`http://localhost:5000/api/syllabus/${currentId}/analyze`, { targetRole: targetRole, isGlobal: isGlobal, syllabusId: currentId }, { withCredentials: true });
+        console.log(`[Roadmap] Starting analysis for Syllabus ID: ${currentId} | Role: ${targetRole}`);
+
+        const response = await axios.post(`http://localhost:5000/api/syllabus/${currentId}/analyze`, 
+            { targetRole: targetRole, isGlobal: isGlobal, syllabusId: currentId }, 
+            { withCredentials: true }
+        );
         
-        setCareerData({ targetRole: targetRole, recommendations: response.data.recommendations });
-        setIsEditingGoal(false);
+        const jobId = response.data.jobId;
+        console.log(`[Roadmap] Job added to queue. Job ID: ${jobId}`);
+        
+        const pollInterval = setInterval(async () => {
+            try {
+                // 🛡️ CACHE BUSTER: Add timestamp to prevent browser from returning old status
+                const statusRes = await axios.get(`http://localhost:5000/api/syllabus/status/${jobId}?t=${Date.now()}`, { withCredentials: true });
+                
+                if (statusRes.data.status === 'completed') {
+                    console.log(`[Roadmap] Job ${jobId} COMPLETE! Initiating Smart Fetch...`);
+                    clearInterval(pollInterval);
+                    
+                    const fetchWithRetry = async (retries = 5, delay = 1000) => {
+                        for (let i = 0; i < retries; i++) {
+                            try {
+                                // 🛡️ CACHE BUSTER: Force the browser to talk to the database
+                                const res = await axios.get(
+                                    `http://localhost:5000/api/syllabus/career-insights?syllabusId=${currentId}&t=${Date.now()}`,
+                                    { withCredentials: true }
+                                );
+
+                                if (res.data?.recommendations?.length > 0) {
+                                    console.log(`[Roadmap] Fresh data secured on attempt ${i + 1}!`);
+                                    return res.data; // 🌟 RETURN THE RAW DATA DIRECTLY
+                                }
+                            } catch (err) {
+                                console.warn(`[Roadmap] Fetch attempt ${i + 1} failed:`, err.message);
+                            }
+
+                            console.log(`[Roadmap] DB writing... waiting to retry (Attempt ${i + 1}/${retries})`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                        return null; 
+                    };
+
+                    const freshData = await fetchWithRetry();
+
+                    if (freshData) {
+                        // 🌟 FORCE STATE UPDATE DIRECTLY
+                        setCareerData(freshData);
+                        if (freshData.targetRole) setTargetRole(freshData.targetRole);
+                        
+                        // Force update academic track (with cache buster)
+                        const endpoint = currentId === 'latest' 
+                            ? `http://localhost:5000/api/syllabus/latest?t=${Date.now()}` 
+                            : `http://localhost:5000/api/syllabus/${currentId}?t=${Date.now()}`;
+                        const resSyllabus = await axios.get(endpoint, { withCredentials: true });
+                        setRoadmap(resSyllabus.data);
+                        
+                        console.log(`[Roadmap] UI Updated successfully.`);
+                    } else {
+                        console.error("[Roadmap] Smart fetch timed out.");
+                        alert("Data is taking longer than expected to save. Please refresh the page in a moment.");
+                    }
+
+                    setAnalyzing(false);
+                    setIsEditingGoal(false);
+
+                } else if (statusRes.data.status === 'failed') {
+                    console.error(`[Roadmap] Job ${jobId} FAILED in the background worker.`);
+                    clearInterval(pollInterval);
+                    alert("AI Analysis failed. Please try again.");
+                    setAnalyzing(false);
+                }
+            } catch (err) {
+                console.error("[Roadmap] Polling error:", err);
+                clearInterval(pollInterval);
+                setAnalyzing(false);
+            }
+        }, 2000); 
+
     } catch (err) {
         console.error("Analysis Error:", err);
         alert(err.response?.data?.message || "Failed to analyze gaps. Please try again.");
-    } finally {
         setAnalyzing(false);
     }
   };
@@ -202,7 +267,6 @@ const Roadmap = () => {
   return (
     <div className={styles.roadmapContainer}>
       
-      {/* 🪄 OUR NEW CLEAN REUSABLE COMPONENT */}
       <TourGuide 
         steps={tourSteps} 
         run={runTour} 
@@ -247,7 +311,7 @@ const Roadmap = () => {
 
       <div className={styles.tracksGrid}>
         
-        <section id="tour-academic" className={styles.trackColumn}> {/* 👈 TARGET 1 */}
+        <section id="tour-academic" className={styles.trackColumn}>
           <div className={styles.trackHeader} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '15px' }}>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', width: '100%' }}>
                 <div className={styles.iconBox}><BookOpen size={24} /></div>
@@ -301,7 +365,7 @@ const Roadmap = () => {
           </div>
         </section>
 
-        <section id="tour-career" className={styles.trackColumn}> {/* 👈 TARGET 2 */}
+        <section id="tour-career" className={styles.trackColumn}>
           <div className={styles.trackHeader} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '15px' }}>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', width: '100%' }}>
                 <div className={styles.iconBox}>

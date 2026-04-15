@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Square, CheckCircle, Clock, Save, RefreshCw } from 'lucide-react'; 
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Square, CheckCircle, Clock, Save, RefreshCw, Loader2 } from 'lucide-react'; 
 import axios from 'axios';
 import TourGuide from '../../Components/common/TourGuide/TourGuide'; 
 import styles from './practise_lab.module.css';
@@ -19,6 +20,9 @@ const normalizeStoredResults = (stored, currentMode) => {
 };
 
 const PractiseQuiz = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [items, setItems] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState('');
@@ -29,6 +33,8 @@ const PractiseQuiz = () => {
   const [contentTitle, setContentTitle] = useState('');
   const [contentTitleError, setContentTitleError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
+
+  const [isLoadingPregen, setIsLoadingPregen] = useState(false);
 
   const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
   const initialTime = settings.timerEnabled ? (settings.timerDuration || 25) : 0; 
@@ -68,15 +74,60 @@ const PractiseQuiz = () => {
 
   const modeMap = { 'Quiz (MCQ)': 'quiz', 'Short Answer': 'short', 'Long Answer': 'long', 'Case Study': 'case', 'Mock Test': 'mock', 'Study Notes': 'notes' };
 
+  // 🌟 FIX: Intelligent Pre-Gen Loader with Dynamic Timer Override
+ // 🌟 FIX: Intelligent Pre-Gen Loader that syncs the Subject Category
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem(RESULTS_KEY) || '[]');
-    const loadedItems = normalizeStoredResults(stored, settings.mode);
-    setItems(loadedItems);
-  }, [settings.mode]);
+    const searchParams = new URLSearchParams(location.search);
+    const libraryId = searchParams.get('libraryId');
+
+    if (libraryId) {
+        setIsLoadingPregen(true);
+        axios.get(`http://localhost:5000/api/calendar/quiz/${libraryId}`, { withCredentials: true })
+            .then(res => {
+                const { category, content } = res.data; // 🌟 Destructure category from updated API
+                const parsedContent = typeof content === 'string' ? JSON.parse(content) : content;
+                setItems(parsedContent.items || []);
+                
+                // 🌟 THE CRITICAL FIX: Update the 'practiceSubject' key in localStorage 
+                // to match the subject defined in the calendar event!
+                if (category) {
+                  localStorage.setItem('practiceSubject', category);
+                }
+                
+                if (parsedContent.meta && parsedContent.meta.mode) {
+                    const mappedMode = Object.keys(modeMap).find(k => modeMap[k] === parsedContent.meta.mode) || 'Quiz (MCQ)';
+                    
+                    const newSettings = { 
+                        ...settings, 
+                        mode: mappedMode,
+                        difficulty: parsedContent.meta.difficulty || settings.difficulty,
+                        timerDuration: parsedContent.meta.timerDuration || settings.timerDuration,
+                        timerEnabled: parsedContent.meta.timerDuration ? true : settings.timerEnabled,
+                        questionCount: parsedContent.meta.numQuestions || settings.questionCount
+                    };
+                    localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+
+                    if (parsedContent.meta.timerDuration) {
+                        setTargetMinutes(parsedContent.meta.timerDuration);
+                        setRemainingSeconds(parsedContent.meta.timerDuration * 60);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Failed to load pregen quiz", err);
+                setGenerateError("Failed to load the pre-generated calendar quiz.");
+            })
+            .finally(() => setIsLoadingPregen(false));
+    } else {
+        const stored = JSON.parse(localStorage.getItem(RESULTS_KEY) || '[]');
+        const loadedItems = normalizeStoredResults(stored, settings.mode);
+        setItems(loadedItems);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   useEffect(() => {
     const hasSeenTour = localStorage.getItem('hasSeenPracticeQuizTour');
-    
     if (!hasSeenTour && items.length > 0 && settings.mode !== 'Study Notes') {
         const checkDOM = setInterval(() => {
             const targetEl = document.querySelector('#tour-quiz-timer');
@@ -86,7 +137,6 @@ const PractiseQuiz = () => {
                 clearInterval(checkDOM);
             }
         }, 100);
-
         return () => clearInterval(checkDOM);
     }
   }, [items, settings.mode]);
@@ -193,7 +243,6 @@ const PractiseQuiz = () => {
     }
   };
 
-  // 🛡️ THE FIX: Polling the AI Queue
   const handleGenerateMore = async () => {
     setGenerateError('');
     const selectedTopics = JSON.parse(localStorage.getItem(SELECTED_KEY) || '[]');
@@ -208,36 +257,22 @@ const PractiseQuiz = () => {
 
     setIsGenerating(true);
     try {
-      // 1. Hand the job to the backend and get our ticket (jobId)
       const response = await axios.post('http://localhost:5000/api/practice/generate', payload, { withCredentials: true });
       const jobId = response.data.jobId;
 
-      // 2. Poll the status route every 2 seconds
       const pollInterval = setInterval(async () => {
           try {
               const statusRes = await axios.get(`http://localhost:5000/api/practice/status/${jobId}`, { withCredentials: true });
-              
               if (statusRes.data.status === 'completed') {
                   clearInterval(pollInterval);
-                  
                   const nextItems = Array.isArray(statusRes.data.data) ? statusRes.data.data : [];
                   localStorage.setItem(RESULTS_KEY, JSON.stringify({ mode: settings.mode, items: nextItems }));
-                  
-                  setItems(nextItems); 
-                  setUserAnswers({}); 
-                  setIsSubmitted(false); 
-                  setQuizScore(null);
-                  setStudiedSeconds(0); 
-                  setSessionStartTime(null); 
-                  setIsFocusActive(false);
-                  setIsGenerating(false);
-
+                  setItems(nextItems); setUserAnswers({}); setIsSubmitted(false); setQuizScore(null); setStudiedSeconds(0); setSessionStartTime(null); setIsFocusActive(false); setIsGenerating(false);
               } else if (statusRes.data.status === 'failed') {
                   clearInterval(pollInterval);
                   setGenerateError('AI failed to generate content. Please try again.');
                   setIsGenerating(false);
               }
-              // If status is still 'waiting' or 'active', it just loops and asks again!
           } catch {
               clearInterval(pollInterval);
               setGenerateError('Error checking queue status.');
@@ -258,16 +293,11 @@ const PractiseQuiz = () => {
 
     try {
       const contentSourceTag = localStorage.getItem('practiceDraftFileMeta') ? 'pdf' : 'syllabus';
-
       const payload = { 
-          title: titleValue.trim(), 
-          type: selectedMode, 
-          category: localStorage.getItem('practiceSubject') || 'General', 
+          title: titleValue.trim(), type: selectedMode, category: localStorage.getItem('practiceSubject') || 'General', 
           content: { items, meta: { mode: settings.mode }, source: contentSourceTag }
       };
-      
       await axios.post('http://localhost:5000/api/library/save-content', payload, { withCredentials: true });
-      
       setIsSaveModalOpen(false); setSaveSuccess('Saved to library.');
     } catch  { setSaveError('Failed to save content.'); } 
     finally { setIsSaving(false); }
@@ -309,6 +339,15 @@ const PractiseQuiz = () => {
   };
 
   const modeLabel = settings.mode || 'Practice';
+
+  if (isLoadingPregen) {
+    return (
+      <div className={styles.quizContainer} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', flexDirection: 'column', gap: '15px' }}>
+        <Loader2 size={40} className={styles.spin} color="#8b5cf6" />
+        <h3 style={{ color: 'var(--text-main)' }}>Loading AI Pre-Generated Material...</h3>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.quizContainer}>

@@ -1,15 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const calendarController = require('../controllers/calendarController');
-const authMiddleware = require('../middleware/authMiddleware'); 
 
-// 1. Get all events for the logged-in user
-router.get('/', authMiddleware, calendarController.getEvents);
+// 🌟 THE FIX: Removed the curly braces so it imports the default function correctly!
+const verifyToken = require('../middleware/authMiddleware'); 
 
-// 2. Create a new event
-router.post('/', authMiddleware, calendarController.createEvent);
+// Your existing routes...
+router.get('/', verifyToken, calendarController.getEvents);
+router.post('/', verifyToken, calendarController.createEvent);
+router.delete('/:eventId', verifyToken, calendarController.deleteEvent);
 
-// 3. Delete an event by ID
-router.delete('/:eventId', authMiddleware, calendarController.deleteEvent);
+// The new route we just added!
+router.get('/quiz/:libraryId', verifyToken, calendarController.getPregeneratedQuiz);
 
 module.exports = router;
