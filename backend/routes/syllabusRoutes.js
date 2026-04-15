@@ -30,6 +30,9 @@ router.patch('/recommendation/:recId/toggle', authMiddleware, syllabusController
 // ==============================================================
 router.post('/:id/analyze', authMiddleware, syllabusController.generateCareerInsights);
 router.get('/:id/analyze/status/:jobId', authMiddleware, syllabusController.checkCareerJobStatus); 
+// Add this line to catch the polling requests! 
+// (Make sure to include verifyToken if your other routes use it)
+router.get('/status/:jobId', syllabusController.checkCareerJobStatus);
 
 router.put('/:id/structure', authMiddleware, syllabusController.updateSyllabusStructure);
 

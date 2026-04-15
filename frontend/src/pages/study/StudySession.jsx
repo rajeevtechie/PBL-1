@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Play, Pause, Square, Folder, BookOpen, Code, Edit3, Clock, ArrowLeft, Star } from 'lucide-react';
+import { Play, Pause, Square, Folder, BookOpen, Code, Edit3, Clock, ArrowLeft, Star, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import styles from './StudySession.module.css';
 import { useFocus } from '../../context/FocusContext'; 
@@ -24,16 +24,39 @@ const StudySession = () => {
   const [showRating, setShowRating] = useState(false);
   const [ratingValue, setRatingValue] = useState(5); 
 
-  useEffect(() => {
-    const passedSubject = location.state?.defaultSubject || location.state?.subjectName;
-    if (passedSubject && !isActive && selectedSubject !== passedSubject) {
-      setSelectedSubject(passedSubject);
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state, isActive, selectedSubject, setSelectedSubject]);
+  // 🌟 FIX: A 'routing ready' flag to prevent early rendering while we parse the URL
+  const [isRoutingReady, setIsRoutingReady] = useState(false);
 
   useEffect(() => {
-    if (!selectedSubject) {
+    // 1. Look for incoming subject requests
+    let passedSubject = location.state?.defaultSubject || location.state?.subjectName;
+    
+    if (!passedSubject && location.search) {
+      const searchParams = new URLSearchParams(location.search);
+      const urlSubject = searchParams.get('subject');
+      if (urlSubject) passedSubject = urlSubject;
+    }
+
+    // 2. Execute state changes
+    if (!passedSubject && !isActive && selectedSubject) {
+        // Only clear if we genuinely arrived with nothing and aren't active
+        setSelectedSubject(null);
+    } else if (passedSubject && !isActive && selectedSubject !== passedSubject) {
+        // Set the new subject!
+        setSelectedSubject(passedSubject);
+    }
+
+    // 3. Mark routing as complete so the UI can render safely
+    setIsRoutingReady(true);
+    
+    // We intentionally DO NOT wipe the URL here. We leave it alone to prevent double-renders.
+    // The Back button handles the actual URL cleanup when the user decides to leave.
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.state, location.search, isActive]);
+
+  useEffect(() => {
+    if (isRoutingReady && !selectedSubject) {
       const fetchSubjects = async () => {
         setLoadingSubjects(true);
         try {
@@ -50,7 +73,7 @@ const StudySession = () => {
       };
       fetchSubjects();
     }
-  }, [selectedSubject]);
+  }, [selectedSubject, isRoutingReady]);
 
   const handleNavigateToPractice = () => {
     navigate('/assessment', { state: { subjectName: selectedSubject } });
@@ -60,7 +83,9 @@ const StudySession = () => {
     const studiedSeconds = (targetMinutes * 60) - remainingSeconds;
     
     if (studiedSeconds < 60) {
-        handleStopAndSave(0);
+        stopSession(0);
+        setSelectedSubject(null);
+        navigate('/dashboard'); 
     } else {
         if (!isPaused) pauseSession(); 
         setShowRating(true);
@@ -71,6 +96,7 @@ const StudySession = () => {
     setShowRating(false);
     await stopSession(score); 
     setSelectedSubject(null); 
+    navigate('/dashboard'); 
   };
 
   const formatTime = (totalSeconds) => {
@@ -78,6 +104,15 @@ const StudySession = () => {
     const s = (totalSeconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
+
+  // 🌟 FIX: Prevent the component from rendering the wrong page while it figures out the URL
+  if (!isRoutingReady) {
+    return (
+        <div className={styles.container} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+            <Loader2 size={32} className={styles.spin} color="var(--primary)" />
+        </div>
+    );
+  }
 
   // --- 1. BRIDGE PAGE (SUBJECT SELECTION) ---
   if (!selectedSubject) {
@@ -94,7 +129,11 @@ const StudySession = () => {
           </div>
         </header>
         
-        {loadingSubjects ? <p style={{color: 'var(--text-dim)', marginTop: '20px'}}>Loading your subjects...</p> : (
+        {loadingSubjects ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-dim)', marginTop: '20px' }}>
+                <Loader2 size={18} className={styles.spin} /> Loading your subjects...
+            </div>
+        ) : (
           <div className={styles.subjectGrid}>
             {subjects.length === 0 ? (
                <div className={`${styles.subjectCard} ${styles.animateFadeInUp}`}>
@@ -124,10 +163,15 @@ const StudySession = () => {
     <div className={styles.container}>
       <header className={`${styles.headerRow} ${styles.animateFadeInUp}`}>
         <div>
-          {/* 🛡️ UX FIX: Button now clears subject to go back to the bridge page */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: 'var(--text-dim)', marginBottom: '15px', fontWeight: '500' }} onClick={() => setSelectedSubject(null)}>
-            <ArrowLeft size={18} /> Back to Subjects
-          </div>
+          {!isActive && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: 'var(--text-dim)', marginBottom: '15px', fontWeight: '500' }} onClick={() => {
+                setSelectedSubject(null);
+                // 🌟 FIX: Clean the URL when the user explicitly clicks "Back"
+                navigate('/study', { replace: true, state: {} }); 
+            }}>
+              <ArrowLeft size={18} /> Back to Subjects
+            </div>
+          )}
           <span className={styles.badge}>FOCUS MODE</span>
           <h2 className={styles.title}>{selectedSubject}</h2>
         </div>
@@ -154,7 +198,6 @@ const StudySession = () => {
           </div>
 
           <div className={styles.timerCircle}>
-            {/* 🛡️ LIGHT MODE FIX: Timer text color */}
             <div className={styles.timeDisplay} style={{ color: isPaused ? '#f59e0b' : 'var(--text-main)' }}>
                {formatTime(remainingSeconds)}
             </div>
@@ -217,7 +260,6 @@ const StudySession = () => {
       {/* --- 3. RATING MODAL OVERLAY --- */}
       {showRating && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-            {/* 🛡️ LIGHT MODE FIX: Modal Background, Border, and Text Colors */}
             <div style={{ backgroundColor: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: '20px', padding: '40px', width: '90%', maxWidth: '420px', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
                 <h3 style={{ fontSize: '1.8rem', margin: '0 0 10px 0', color: 'var(--text-main)', fontWeight: '800' }}>Session Complete</h3>
                 <p style={{ color: 'var(--text-dim)', fontSize: '1.05rem', marginBottom: '30px' }}>How focused were you during this session?</p>
