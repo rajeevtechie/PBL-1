@@ -271,3 +271,36 @@
 .dangerBtn:hover {
   background-color: rgba(239, 68, 68, 0.1);
 }
+
+/* --- WEEK & DAY VIEW CONGESTION FIXES --- */
+
+/* 1. Increase the vertical height of each hour block */
+.calendarWrapper :global(.rbc-timeslot-group) {
+  min-height: 80px !important; 
+}
+
+/* 2. Format the time labels on the left for better readability */
+.calendarWrapper :global(.rbc-time-gutter .rbc-label) {
+  padding: 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* 3. Make the half-hour dashed lines more subtle */
+.calendarWrapper :global(.rbc-day-slot .rbc-time-slot) {
+  border-top: 1px dashed rgba(255, 255, 255, 0.05);
+}
+
+/* 4. Add a nice hover effect to empty timeslots so users know they can click */
+.calendarWrapper :global(.rbc-day-slot .rbc-time-slot:hover) {
+  background-color: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+
+/* 5. Clean up the header borders in the week view */
+.calendarWrapper :global(.rbc-time-header.rbc-overflowing) {
+  border-right: none;
+}
