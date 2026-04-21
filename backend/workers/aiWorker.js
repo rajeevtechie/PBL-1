@@ -108,7 +108,7 @@ const aiWorker = new Worker('ai-tasks', async (job) => {
 
 }, { connection: redisConnection, concurrency: 2 });
 
-aiWorker.on('completed', (job) => console.log(`[Queue] ✅ Job ${job.id} completed successfully!`));
-aiWorker.on('failed', (job, err) => console.log(`[Queue] ❌ Job ${job.id} failed:`, err.message));
+aiWorker.on('completed', (job) => console.log(`[Queue] Job ${job.id} completed successfully now!`));
+aiWorker.on('failed', (job, err) => console.log(`[Queue] Job ${job.id} failed:`, err.message));
 
 module.exports = aiWorker;
