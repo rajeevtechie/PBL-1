@@ -85,7 +85,7 @@ app.get('/', (req, res) => {
 
 // --- Start Server ---
 app.listen(PORT, () => {
-    console.log(`🚀 InsightED Server running on port ${PORT}`);
+    console.log(`InsightED Server running on port ${PORT}`);
 });
 
 // Start background cron jobs

@@ -18,8 +18,8 @@ const redisConnection = new Redis(process.env.REDIS_URL, {
   }
 });
 
-redisConnection.on('connect', () => console.log('🟢 Successfully connected to Redis'));
-redisConnection.on('error', (err) => console.error('🔴 Redis connection error:', err.message));
+redisConnection.on('connect', () => console.log('Successfully connected to Redis'));
+redisConnection.on('error', (err) => console.error('Redis connection error:', err.message));
 
 const aiQueue = new Queue('ai-tasks', { 
     connection: redisConnection,
@@ -34,7 +34,7 @@ const aiQueue = new Queue('ai-tasks', {
     }
 });
 
-console.log("🟢 Master AI Queue Initialized");
+console.log("Master AI Queue Initialized");
 
 module.exports = {
   aiQueue,

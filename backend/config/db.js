@@ -24,10 +24,10 @@ const promisePool = pool.promise();
 // Test the connection
 pool.getConnection((err, connection) => {
     if (err) {
-        console.error('🔴 Database Connection Failed:', err.code);
+        console.error('Database Connection Failed:', err.code);
         console.error('Check your .env file credentials!');
     } else {
-        console.log('🟢 Connected to TiDB Cloud Database successfully!');
+        console.log('Connected to TiDB Cloud Database successfully!');
         connection.release();
     }
 });
