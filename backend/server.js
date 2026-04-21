@@ -15,10 +15,10 @@ const focusRoutes = require('./routes/focusRoutes');
 const insightRoutes = require('./routes/insightRoutes');
 const userRoutes = require('./routes/userRoutes'); 
 const calendarRoutes = require('./routes/calendarRoutes');
-const pushRoutes = require('./routes/pushRoutes'); // 🌟 NEW: Push Notification Routes
+const pushRoutes = require('./routes/pushRoutes'); //  NEW: Push Notification Routes
 
 const startWeeklyEmailCron = require('./cron/weeklySummary');
-const startNotificationEngine = require('./cron/notificationEngine'); // 🌟 NEW: Push Notification Engine
+const startNotificationEngine = require('./cron/notificationEngine'); // NEW: Push Notification Engine
 require('./workers/aiWorker'); // Starts the background queue worker
 
 const app = express();
@@ -75,7 +75,7 @@ app.use('/api/users', userRoutes);
 // 8. Calendar & Scheduling Engine
 app.use('/api/calendar', calendarRoutes);
 
-// 9. 🌟 Push Notifications Subscription
+// 9. Push Notifications Subscription
 app.use('/api/push', pushRoutes);
 
 // --- Test Route ---
@@ -85,9 +85,9 @@ app.get('/', (req, res) => {
 
 // --- Start Server ---
 app.listen(PORT, () => {
-    console.log(`🚀 InsightED Server running on port ${PORT}`);
+    console.log(`InsightED Server running on port ${PORT}`);
 });
 
 // Start background cron jobs
 startWeeklyEmailCron();
-startNotificationEngine(); // 🌟 NEW: Starts checking for events every minute!
+startNotificationEngine(); //  NEW: Starts checking for events every minute!

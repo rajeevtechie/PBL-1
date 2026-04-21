@@ -12,7 +12,7 @@ webpush.setVapidDetails(
 const startNotificationEngine = () => {
     // Run every minute ('* * * * *')
     cron.schedule('* * * * *', async () => {
-        console.log("⏰ Checking for upcoming events...");
+        console.log("Checking for upcoming events...");
 
         try {
             // Find events starting in exactly 5 minutes that haven't been notified yet
@@ -44,14 +44,14 @@ const startNotificationEngine = () => {
                     
                     // Mark as notified so we don't spam them
                     await db.execute('UPDATE scheduled_events SET is_notified = TRUE WHERE id = ?', [event.id]);
-                    console.log(`✅ Sent push notification for event ID: ${event.id}`);
+                    console.log(`Sent push notification for event ID: ${event.id}`);
 
                 } catch (pushErr) {
-                    console.error("❌ Failed to send push. Subscription might be invalid.", pushErr);
+                    console.error("Failed to send push. Subscription might be invalid.", pushErr);
                 }
             }
         } catch (error) {
-            console.error("❌ Error running Notification Engine:", error);
+            console.error("Error running Notification Engine:", error);
         }
     });
 };

@@ -5,10 +5,10 @@ const db = require('../config/db');
 // 🛡️ NEW: Importing your centralized model!
 const { model } = require('../config/geminiConfig'); 
 
-console.log("👷 AI Worker is standing by...");
+console.log("AI Worker is standing by...");
 
 const aiWorker = new Worker('ai-tasks', async (job) => {
-    console.log(`[Queue] ⏳ Processing Job ${job.id}: ${job.name}`);
+    console.log(`[Queue] Processing Job ${job.id}: ${job.name}`);
 
     // --- 1. PRACTICE GENERATION JOB ---
     if (job.name === 'generate-practice') {
