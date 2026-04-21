@@ -4,11 +4,15 @@
 }
 
 .mainContent {
-  margin-left: var(--sidebar-width);
+  /* 🌟 CRITICAL: Push content past the shrunk 80px sidebar */
+  margin-left: 80px; 
+  width: calc(100% - 80px); /* Prevents horizontal scrollbars */
+  
   flex: 1;
   display: flex;
   flex-direction: column;
   height: 100vh;
+  background-color: var(--bg-app); /* Matches theme */
 }
 
 .topHeader {
@@ -18,6 +22,7 @@
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-panel); /* Matches theme */
 }
 
 .userProfile {
@@ -30,6 +35,7 @@
   justify-content: center;
   font-weight: 600;
   border: 1px solid var(--border-color);
+  color: var(--text-main);
 }
 
 .scrollArea {
@@ -38,31 +44,33 @@
   overflow-y: auto;
 }
 
-/* FLOATING TIMER CSS */
+/* FLOATING TIMER CSS - NOW THEME AWARE! */
 .floatingTimer {
   position: fixed;
   bottom: 30px;
   right: 30px;
-  background: #1e293b;
+  background: var(--bg-panel);
   border: 1px solid #3b82f6;
   border-radius: 12px;
   padding: 12px 20px;
   display: flex;
   align-items: center;
   gap: 20px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
   z-index: 1000;
-  color: white;
+  color: var(--text-main);
   animation: slideIn 0.3s ease-out;
 }
+
 .timerInfo {
   display: flex;
   flex-direction: column;
   cursor: pointer;
 }
+
 .timerSubject {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--text-muted);
   text-transform: uppercase;
   font-weight: bold;
   max-width: 150px;
@@ -70,32 +78,34 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.timerClock {
-  font-size: 1.25rem;
-  font-weight: bold;
-  color: #10b981;
-  font-variant-numeric: tabular-nums;
-}
+
 .timerControls {
   display: flex;
   gap: 8px;
 }
-.controlBtn {
-  background: rgba(255,255,255,0.1);
+
+.iconBtn {
+  background: var(--bg-app);
   border: none;
-  color: white;
+  color: var(--text-main);
+  padding: 6px;
   border-radius: 6px;
-  width: 32px;
-  height: 32px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
 }
-.controlBtn:hover {
-  background: rgba(255,255,255,0.2);
+
+.iconBtn:hover {
+  background: var(--bg-panel-hover);
 }
+
+.stopBtn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
 @keyframes slideIn {
   from { transform: translateY(50px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }

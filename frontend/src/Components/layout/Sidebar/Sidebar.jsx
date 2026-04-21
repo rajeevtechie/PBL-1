@@ -2,16 +2,8 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
-  LayoutDashboard, 
-  Map, 
-  Clock, 
-  Calendar, // 🌟 NEW: Imported Calendar Icon
-  BarChart2, 
-  CheckSquare, 
-  Zap, 
-  Library,
-  Settings, 
-  LogOut 
+  LayoutDashboard, Map, Clock, Calendar, BarChart2, 
+  CheckSquare, Zap, Library, Settings, LogOut 
 } from 'lucide-react';
 import styles from './Sidebar.module.css';
 
@@ -42,97 +34,66 @@ const Sidebar = () => {
     <aside className={styles.sidebar}>
       
       {/* 1. BRANDING HEADER */}
-      <div 
-        className={styles.logoContainer} 
-        onClick={handleLogoClick} 
-        style={{ cursor: 'pointer' }}
-      >
+      <div className={styles.logoContainer} onClick={handleLogoClick}>
         <div className={styles.logoIcon}>IE</div>
         <span className={styles.logoText}>InsightED</span>
       </div>
 
-      {/* 2. NAVIGATION MENU */}
+      {/* 2. NAVIGATION LINKS */}
       <nav className={styles.navMenu}>
-        <NavLink 
-          to="/dashboard" 
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <LayoutDashboard size={20} />
-          <span>Dashboard</span>
+        <NavLink to="/dashboard" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navItemIcon}><LayoutDashboard size={20} /></div>
+          <span className={styles.navItemText}>Dashboard</span>
         </NavLink>
 
-        <NavLink 
-          to="/roadmap" 
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <Map size={20} />
-          <span>Roadmap</span>
+        <NavLink to="/roadmap" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navItemIcon}><Map size={20} /></div>
+          <span className={styles.navItemText}>Roadmap</span>
         </NavLink>
 
-        <NavLink 
-          to="/study" 
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <Clock size={20} />
-          <span>Focus Mode</span>
+        <NavLink to="/focus" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navItemIcon}><Clock size={20} /></div>
+          <span className={styles.navItemText}>Focus Mode</span>
         </NavLink>
 
-        {/* 🌟 NEW: Calendar Navigation Link */}
-        <NavLink 
-          to="/calendar" 
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <Calendar size={20} />
-          <span>Schedule</span>
+        {/* 🚨 This now points strictly to /calendar to match App.jsx */}
+        <NavLink to="/calendar" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navItemIcon}><Calendar size={20} /></div>
+          <span className={styles.navItemText}>Schedule</span>
         </NavLink>
 
-        <NavLink 
-          to="/analytics" 
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <BarChart2 size={20} />
-          <span>Analytics</span>
+        <NavLink to="/analytics" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navItemIcon}><BarChart2 size={20} /></div>
+          <span className={styles.navItemText}>Analytics</span>
         </NavLink>
 
-        <NavLink 
-          to="/assessment" 
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <CheckSquare size={20} />
-          <span>Practice Lab</span>
+        <NavLink to="/assessment" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navItemIcon}><CheckSquare size={20} /></div>
+          <span className={styles.navItemText}>Practice Lab</span>
         </NavLink>
 
-        <NavLink 
-          to="/library" 
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <Library size={20} />
-          <span>Library</span>
+        <NavLink to="/library" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navItemIcon}><Library size={20} /></div>
+          <span className={styles.navItemText}>Library</span>
         </NavLink>
 
-        <NavLink 
-          to="/insights" 
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <Zap size={20} />
-          <span>AI Insights</span>
+        <NavLink to="/insights" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navItemIcon}><Zap size={20} /></div>
+          <span className={styles.navItemText}>AI Insights</span>
         </NavLink>
 
         <div className={styles.divider}></div>
 
-        <NavLink 
-          to="/settings" 
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <Settings size={20} />
-          <span>Settings</span>
+        <NavLink to="/settings" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navItemIcon}><Settings size={20} /></div>
+          <span className={styles.navItemText}>Settings</span>
         </NavLink>
       </nav>
 
       {/* 3. FOOTER ACTIONS */}
       <div className={styles.footer}>
         <button className={styles.logoutBtn} onClick={handleLogout}>
-          <LogOut size={20} />
+          <div className={styles.navItemIcon}><LogOut size={20} /></div>
           <span>Logout</span>
         </button>
       </div>

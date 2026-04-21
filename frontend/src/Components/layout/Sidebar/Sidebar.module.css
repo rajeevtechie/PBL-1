@@ -1,5 +1,5 @@
 .sidebar {
-  width: 260px;
+  width: 80px;
   height: 100vh;
   background-color: var(--bg-panel);
   border-right: 1px solid var(--border-color);
@@ -9,67 +9,106 @@
   top: 0;
   left: 0;
   z-index: 50;
-  transition: transform 0.3s ease;
+  
+  /* Smoothly animates width, shadow, and theme colors */
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.3s ease, 
+              background-color 0.3s ease, 
+              border-color 0.3s ease;
+  overflow: hidden; 
+  white-space: nowrap; 
+}
+
+.sidebar:hover {
+  width: 260px;
+  box-shadow: 5px 0 25px rgba(0,0,0,0.15); 
 }
 
 /* 1. LOGO SECTION */
 .logoContainer {
   height: 80px;
+  min-height: 80px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 24px;
+  padding: 0 22px; 
   border-bottom: 1px solid var(--border-color);
-  
-  /* CRITICAL: Makes it look clickable */
-  cursor: pointer; 
+  cursor: pointer;
   transition: background-color 0.2s;
+  width: 260px; 
 }
 
 .logoContainer:hover {
-  background-color: var(--bg-app); /* Subtle hover effect */
+  background-color: var(--bg-app); 
 }
 
 .logoIcon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  min-width: 36px; 
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: white; 
   font-weight: 800;
-  font-size: 0.9rem;
+  font-size: 1.1rem;
 }
 
 .logoText {
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   font-weight: 700;
   color: var(--text-main);
-  letter-spacing: -0.5px;
+  margin-left: 12px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.sidebar:hover .logoText {
+  opacity: 1;
+  transition-delay: 0.15s; 
 }
 
 /* 2. NAVIGATION LINKS */
 .navMenu {
-  flex: 1; /* Pushes the footer down */
-  padding: 24px 16px;
+  flex: 1;
+  padding: 20px 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .navItem {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  border-radius: 8px;
+  padding: 12px 30px; 
   color: var(--text-muted);
   font-weight: 500;
   transition: all 0.2s ease;
   font-size: 0.95rem;
+  text-decoration: none;
+  width: 260px; 
+  border-left: 3px solid transparent; 
+}
+
+.navItemIcon {
+  min-width: 20px; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navItemText {
+  margin-left: 16px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.sidebar:hover .navItemText {
+  opacity: 1;
+  transition-delay: 0.15s;
 }
 
 .navItem:hover {
@@ -77,46 +116,55 @@
   color: var(--text-main);
 }
 
-/* Active State (When you are on that page) */
 .active {
-  background-color: rgba(99, 102, 241, 0.1); /* Low opacity primary */
-  color: var(--primary);
-  font-weight: 600;
+  background-color: rgba(99, 102, 241, 0.1); 
+  color: #6366f1; 
+  border-left: 3px solid #6366f1; 
+}
+
+.active:hover {
+  background-color: rgba(99, 102, 241, 0.15);
 }
 
 .divider {
   height: 1px;
   background-color: var(--border-color);
-  margin: 12px 0;
+  margin: 10px 30px;
+  width: 200px;
 }
 
-/* 3. LOGOUT BUTTON */
+/* 3. FOOTER ACTIONS */
 .footer {
-  padding: 16px;
+  padding: 16px 0;
   border-top: 1px solid var(--border-color);
-  background-color: var(--bg-panel);
 }
 
 .logoutBtn {
-  width: 100%;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  background: transparent;
-  border: none; /* Removes default button border */
-  border-radius: 8px;
-  color: var(--text-muted);
+  width: 260px;
+  padding: 12px 30px;
+  background-color: transparent;
+  border: none;
+  color: #ef4444; 
+  font-weight: 600;
   font-size: 0.95rem;
-  font-weight: 500;
-  
-  /* CRITICAL: Makes it look clickable */
-  cursor: pointer; 
-  transition: all 0.2s;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
 }
 
-/* Red Hover Effect for Logout */
 .logoutBtn:hover {
-  background-color: rgba(239, 68, 68, 0.1); 
-  color: var(--danger);
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.logoutBtn span {
+  margin-left: 16px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.sidebar:hover .logoutBtn span {
+  opacity: 1;
+  transition-delay: 0.15s;
 }
