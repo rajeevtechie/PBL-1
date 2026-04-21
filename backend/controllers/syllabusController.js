@@ -10,7 +10,7 @@ exports.uploadSyllabus = async (req, res) => {
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
         const userId = req.user.id;
-        console.log(`📤 Processing file: ${req.file.originalname} for User ID: ${userId}`);
+        console.log(`Processing file: ${req.file.originalname} for User ID: ${userId}`);
 
         const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
         const cacheKey = `pdf_${fileHash}`;
@@ -19,7 +19,7 @@ exports.uploadSyllabus = async (req, res) => {
         const [cachedData] = await db.execute('SELECT response_data FROM ai_cache WHERE cache_key = ?', [cacheKey]);
 
         if (cachedData.length > 0) {
-            console.log(`⚡ CACHE HIT! Loading PDF instantly.`);
+            console.log(` CACHE HIT! Loading PDF instantly.`);
             const syllabusJson = JSON.parse(cachedData[0].response_data);
             const courseTitle = syllabusJson.courseTitle || "Untitled Course";
             
@@ -34,7 +34,7 @@ exports.uploadSyllabus = async (req, res) => {
         }
 
         // 🐢 2. CACHE MISS: ADD TO QUEUE
-        console.log(`🐢 CACHE MISS. Adding PDF to background queue...`);
+        console.log(`CACHE MISS. Adding PDF to background queue...`);
         const base64Data = req.file.buffer.toString("base64");
         const mimeType = req.file.mimetype;
 
@@ -44,7 +44,7 @@ exports.uploadSyllabus = async (req, res) => {
 
         res.status(202).json({ message: "Added to queue", jobId: job.id });
     } catch (error) { 
-        console.error("❌ Upload Error:", error);
+        console.error("Upload Error:", error);
         res.status(500).json({ message: "AI Processing Failed", error: error.message }); 
     }
 };
@@ -205,7 +205,7 @@ exports.generateCareerInsights = async (req, res) => {
         }
 
         // 2. Add to Queue
-        console.log(`🐢 CACHE MISS. Adding Career generation to queue...`);
+        console.log(`CACHE MISS. Adding Career generation to queue...`);
         const job = await aiQueue.add('generate-career', {
             courseTitle, academicStructure, targetRole, isAcademicMode, userId, syllabusId, isGlobal, cacheKey
         });
