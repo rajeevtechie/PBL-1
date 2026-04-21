@@ -1,5 +1,5 @@
 import React from 'react';
-import Joyride from 'react-joyride'; // 🛡️ Fixed typo and use default import to prevent Vite crashes
+import {Joyride} from 'react-joyride'; // 🛡️ Fixed typo and use default import to prevent Vite crashes
 
 const TourGuide = ({ steps, run, onComplete }) => {
   // If your automated testing bot is running, it skips the tour completely.
